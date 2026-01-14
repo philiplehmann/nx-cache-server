@@ -23,7 +23,7 @@ pub trait StorageProvider: Send + Sync + 'static {
     async fn store(
         &self,
         hash: &str,
-        data: ReaderStream<impl AsyncRead + Send + Unpin>,
+        data: ReaderStream<impl AsyncRead + Send + Unpin + 'static>,
     ) -> Result<(), StorageError>;
 
     /// Retrieve object as a stream from storage
