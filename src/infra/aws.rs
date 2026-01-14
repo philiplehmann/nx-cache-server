@@ -9,6 +9,7 @@ use aws_sdk_s3::operation::get_object::GetObjectError;
 use aws_sdk_s3::operation::head_object::HeadObjectError;
 use aws_sdk_s3::{config::Region, Client, Config as S3Config};
 use clap::Parser;
+use std::sync::Arc;
 use tokio::io::AsyncRead;
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
@@ -16,6 +17,7 @@ use tokio_util::io::ReaderStream;
 use crate::domain::{
     config::{ConfigError, ConfigValidator},
     storage::{StorageError, StorageProvider},
+    yaml_config::ResolvedBucketConfig,
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -175,6 +177,73 @@ impl S3Storage {
             bucket_name: config.bucket_name.clone(),
         })
     }
+
+    /// Create S3Storage from a resolved bucket configuration
+    pub async fn from_resolved_bucket(
+        bucket_config: &ResolvedBucketConfig,
+    ) -> Result<Self, StorageError> {
+        // Resolve region
+        let region_chain = RegionProviderChain::first_try(
+            bucket_config.region.as_ref().map(|r| Region::new(r.clone())),
+        )
+        .or_default_provider();
+
+        let region = region_chain.region().await.ok_or_else(|| {
+            tracing::error!(
+                "AWS_REGION must be set for bucket '{}'",
+                bucket_config.name
+            );
+            StorageError::OperationFailed
+        })?;
+
+        // Build credentials provider
+        let credentials_provider: Arc<dyn ProvideCredentials> =
+            match (&bucket_config.access_key_id, &bucket_config.secret_access_key) {
+                (Some(access_key_id), Some(secret_access_key)) => {
+                    Arc::new(Credentials::new(
+                        access_key_id,
+                        secret_access_key,
+                        bucket_config.session_token.clone(),
+                        None,
+                        "nx-cache-server",
+                    ))
+                }
+                _ => Arc::new(
+                    DefaultCredentialsChain::builder()
+                        .region(region.clone())
+                        .build()
+                        .await,
+                ),
+            };
+
+        let mut s3_config_builder = S3Config::builder()
+            .behavior_version_latest()
+            .region(region)
+            .credentials_provider(credentials_provider)
+            .timeout_config(
+                TimeoutConfig::builder()
+                    .operation_timeout(std::time::Duration::from_secs(bucket_config.timeout))
+                    .build(),
+            );
+
+        // Configure for custom S3-compatible endpoints (MinIO, Hetzner, etc.)
+        if let Some(endpoint_url) = &bucket_config.endpoint_url {
+            s3_config_builder = s3_config_builder.endpoint_url(endpoint_url);
+        }
+
+        // Force path-style addressing if configured (required for MinIO and some S3-compatible services)
+        if bucket_config.force_path_style {
+            s3_config_builder = s3_config_builder.force_path_style(true);
+        }
+
+        let s3_config = s3_config_builder.build();
+        let client = Client::from_conf(s3_config);
+
+        Ok(Self {
+            client,
+            bucket_name: bucket_config.bucket_name.clone(),
+        })
+    }
 }
 
 #[async_trait]
@@ -202,27 +271,52 @@ impl StorageProvider for S3Storage {
     async fn store(
         &self,
         hash: &str,
-        mut data: ReaderStream<impl AsyncRead + Send + Unpin>,
+        data: ReaderStream<impl AsyncRead + Send + Unpin + 'static>,
     ) -> Result<(), StorageError> {
         if self.exists(hash).await? {
             return Err(StorageError::AlreadyExists);
         }
 
-        // For simplicity, read all data into memory first
-        // TODO: Implement true streaming for better memory efficiency
-        let mut buffer = Vec::new();
-        while let Some(chunk) = data.next().await {
-            let chunk = chunk.map_err(|_| StorageError::OperationFailed)?;
-            buffer.extend_from_slice(&chunk);
-        }
+        // Convert ReaderStream to ByteStream without buffering entire content
+        // Use a channel to bridge the non-Sync stream to a Sync body
 
-        let body = aws_sdk_s3::primitives::ByteStream::from(buffer);
+
+        // Create a channel for streaming data
+        let (tx, rx) = tokio::sync::mpsc::channel::<Result<bytes::Bytes, std::io::Error>>(16);
+
+        // Spawn a task to forward the stream to the channel
+        // This allows the stream processing to happen in a separate task
+        tokio::spawn(async move {
+            tokio::pin!(data);
+            while let Some(result) = data.next().await {
+                if tx.send(result).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        // Create a stream from the receiver
+        let recv_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        // Map to frames for http-body 1.0
+        let frame_stream = recv_stream.map(|result| {
+            result
+                .map(|bytes| hyper::body::Frame::data(bytes))
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+        });
+
+        // Create a StreamBody and box it (the receiver stream is Sync)
+        let stream_body = http_body_util::StreamBody::new(frame_stream);
+        let boxed_body = http_body_util::combinators::BoxBody::new(stream_body);
+
+        // Convert to AWS ByteStream using the http-body 1.0 API
+        let byte_stream = aws_sdk_s3::primitives::ByteStream::from_body_1_x(boxed_body);
 
         self.client
             .put_object()
             .bucket(&self.bucket_name)
             .key(hash)
-            .body(body)
+            .body(byte_stream)
             .send()
             .await
             .map_err(|e| {
@@ -254,5 +348,31 @@ impl StorageProvider for S3Storage {
 
         // Direct streaming - no buffering
         Ok(Box::new(result.body.into_async_read()))
+    }
+}
+
+impl S3Storage {
+    /// Test bucket connectivity by performing a list_objects_v2 operation
+    /// This verifies that credentials are valid and the bucket is accessible
+    pub async fn test_connection(&self) -> Result<(), StorageError> {
+        tracing::debug!("Testing connection to bucket: {}", self.bucket_name);
+
+        self.client
+            .list_objects_v2()
+            .bucket(&self.bucket_name)
+            .max_keys(1) // Only need to list one object to verify connectivity
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to connect to bucket '{}': {:?}",
+                    self.bucket_name,
+                    e
+                );
+                StorageError::OperationFailed
+            })?;
+
+        tracing::info!("Successfully connected to bucket: {}", self.bucket_name);
+        Ok(())
     }
 }

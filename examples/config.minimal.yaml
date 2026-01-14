@@ -1,0 +1,16 @@
+# Minimal Nx Cache Server Configuration
+# This is the simplest possible setup for quick testing
+
+port: 3000
+
+buckets:
+  - name: default
+    bucketName: my-nx-cache-bucket
+    region: us-west-2
+    forcePathStyle: false  # Set to true for MinIO
+
+serviceAccessTokens:
+  - name: default
+    bucket: default
+    prefix: ""
+    accessTokenEnv: NX_CACHE_TOKEN

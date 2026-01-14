@@ -1,12 +1,15 @@
 # Nx Custom Remote Cache Server
 
-[![Release](https://github.com/nxcite/nx-cache-server/actions/workflows/release.yml/badge.svg)](https://github.com/nxcite/nx-cache-server/actions/workflows/release.yml)
+[![Release](https://github.com/philiplehmann/nx-cache-server/actions/workflows/release.yml/badge.svg)](https://github.com/philiplehmann/nx-cache-server/actions/workflows/release.yml)
 
 A lightweight, high-performance Nx cache server that bridges Nx CLI clients with cloud storage providers for caching build artifacts. Built in Rust with a focus on maximum performance and minimal memory usage - less than 4MB during regular operation! 🚀
 
 ## Features
 
 - **AWS S3 Integration**: Direct streaming integration with AWS S3 and S3-compatible services
+- **Multiple Backends**: Support for multiple S3 buckets with flexible YAML configuration
+- **Prefix-Based Isolation**: Logical isolation within buckets using prefixes (e.g., `/ci`, `/team1`)
+- **Multiple Service Tokens**: Independent tokens with different bucket and prefix assignments
 - **Memory Efficient**: Direct streaming with less than 4MB RAM usage during typical operation
 - **High Performance**: Built with Rust and Axum for maximum throughput
 - **Zero Dependencies**: Self-contained single executable with no external dependencies required
@@ -23,15 +26,12 @@ Access to AWS S3 (or S3-compatible service like MinIO)
 ### Installation
 
 #### Step 1: Download the binary
-Go to [Releases page](https://github.com/nxcite/nx-cache-server/releases) and download the binary for your operating system.
+Go to [Releases page](https://github.com/philiplehmann/nx-cache-server/releases) and download the binary for your operating system.
 
 Alternatively, use command line tools:
 ```bash
-# Using curl
-curl -L https://github.com/nxcite/nx-cache-server/releases/download/<VERSION>/nx-cache-aws-<VERSION>-<PLATFORM> -o nx-cache-aws
-
-# Using wget
-wget https://github.com/nxcite/nx-cache-server/releases/download/<VERSION>/nx-cache-aws-<VERSION>-<PLATFORM> -O nx-cache-aws
+# Download the binary
+curl -L https://github.com/philiplehmann/nx-cache-server/releases/download/<VERSION>/nx-cache-server-<VERSION>-<PLATFORM> -o nx-cache-server
 
 # Replace:
 #  <VERSION> with the version tag (e.g., v1.1.0)
@@ -40,14 +40,58 @@ wget https://github.com/nxcite/nx-cache-server/releases/download/<VERSION>/nx-ca
 
 #### Step 2: Make executable (Linux/macOS only)
 ```bash
-chmod +x nx-cache-aws
+chmod +x nx-cache-server
 ```
 
-#### Step 3: Configure the server
+## Configuration
 
-The server supports configuration via environment variables, command-line arguments, or both.
+### YAML Configuration
 
-##### Option A: Environment Variables (Recommended)
+**Features:**
+- ✅ Multiple S3 buckets as backends
+- ✅ Multiple service tokens with independent bucket assignments
+- ✅ Prefix-based isolation (e.g., `/ci`, `/team1`)
+- ✅ Environment variable substitution for secrets
+- ✅ Flexible credential management
+
+Create a `config.yaml` file:
+
+```yaml
+port: 3000
+
+buckets:
+  - name: production
+    bucketName: my-nx-cache
+    region: us-west-2
+
+serviceAccessTokens:
+  - name: ci-pipeline
+    bucket: production
+    prefix: /ci
+    accessTokenEnv: CI_ACCESS_TOKEN
+```
+
+Set environment variables and run:
+
+```bash
+export CI_ACCESS_TOKEN=your-secret-token
+nx-cache-server --config config.yaml
+```
+
+**📚 [Complete Configuration Guide](docs/yaml-configuration.md)** - Detailed documentation with examples for:
+- Multiple buckets and regions
+- Team-based prefix isolation
+- MinIO and S3-compatible storage
+- Kubernetes deployments
+- Security best practices
+
+**📋 [Example Configurations](examples/)** - Ready-to-use configuration files:
+- [`config.minimal.yaml`](examples/config.minimal.yaml) - Simplest setup for quick start
+- [`config.example.yaml`](examples/config.example.yaml) - Comprehensive example with all options
+
+## Running the Server
+
+##### Using Environment Variables for Credentials
 ```bash
 # Required
 export S3_BUCKET_NAME="your-s3-bucket-name"
@@ -161,5 +205,3 @@ For more details, see the [Nx documentation](https://nx.dev/recipes/running-task
 <img width="369" height="387" alt="image" src="https://github.com/user-attachments/assets/97c4ebab-75a1-4f83-bc52-cf4ebbc73bfa" />
 
 <img width="465" height="366" alt="image" src="https://github.com/user-attachments/assets/512af549-0e9a-40ac-95bd-f9eea0da38a7" />
-
-

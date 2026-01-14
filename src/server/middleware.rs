@@ -1,4 +1,3 @@
-use crate::domain::storage::StorageProvider;
 use crate::server::AppState;
 use axum::{
     extract::{Request, State},
@@ -9,14 +8,15 @@ use axum::{
 use subtle::ConstantTimeEq;
 use tracing;
 
-pub async fn auth_middleware<T>(
-    State(state): State<AppState<T>>,
-    request: Request,
+/// Extension type to carry the authenticated token through the request
+#[derive(Clone)]
+pub struct AuthenticatedToken(pub String);
+
+pub async fn auth_middleware(
+    State(state): State<AppState>,
+    mut request: Request,
     next: Next,
-) -> Result<Response, StatusCode>
-where
-    T: StorageProvider,
-{
+) -> Result<Response, StatusCode> {
     // Extract Bearer token from Authorization header
     let token = request
         .headers()
@@ -30,18 +30,29 @@ where
     };
 
     // Check token against all configured tokens using constant-time comparison
-    let mut matched_name: Option<&str> = None;
+    let mut matched_token: Option<String> = None;
 
-    for token_value in state.token_registry.tokens() {
+    for token_value in state.storage.tokens() {
         if bool::from(token.as_bytes().ct_eq(token_value.as_bytes())) {
-            matched_name = state.token_registry.find_token_name(token_value);
+            matched_token = Some(token_value.clone());
             break;
         }
     }
 
-    match matched_name {
-        Some(name) => {
-            tracing::info!("Authenticated request from: {}", name);
+    match matched_token {
+        Some(token_value) => {
+            // Get the token configuration to log the name
+            if let Some(config) = state.storage.get_token_config(&token_value) {
+                tracing::info!(
+                    "Authenticated request from: {} (bucket: {}, prefix: {})",
+                    config.name,
+                    config.bucket,
+                    config.prefix
+                );
+            }
+
+            // Store the token in request extensions for handlers to use
+            request.extensions_mut().insert(AuthenticatedToken(token_value));
             Ok(next.run(request).await)
         }
         None => {

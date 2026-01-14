@@ -1,0 +1,109 @@
+# Nx Cache Server Configuration Example
+# This file demonstrates all available configuration options
+
+# Port for the HTTP server (optional, defaults to 3000)
+port: 3000
+
+# Enable debug logging (optional, defaults to false)
+debug: false
+
+# Bucket configurations
+# You can configure multiple S3 buckets or S3-compatible storage backends
+buckets:
+  # First bucket example - AWS S3 with explicit credentials
+  - name: production-bucket
+    bucketName: my-production-cache
+
+    # AWS Credentials (optional - auto-discovered from IAM roles, config files, SSO if not provided)
+    # Provide either the value directly OR via environment variable
+    accessKeyId: YOUR_AWS_ACCESS_KEY_ID
+    # accessKeyIdEnv: AWS_ACCESS_KEY_ID
+
+    secretAccessKey: YOUR_AWS_SECRET_ACCESS_KEY
+    # secretAccessKeyEnv: AWS_SECRET_ACCESS_KEY
+
+    # Session token for temporary credentials (optional)
+    # sessionToken: YOUR_SESSION_TOKEN
+    # sessionTokenEnv: AWS_SESSION_TOKEN
+
+    # AWS Region (optional - auto-discovered from AWS config, EC2/ECS metadata if not provided)
+    region: us-west-2
+
+    # Force path-style addressing (optional, defaults to false)
+    # Set to true for MinIO and some S3-compatible services
+    forcePathStyle: false
+
+    # S3 operation timeout in seconds (optional, defaults to 30)
+    timeout: 30
+
+  # Second bucket example - Using environment variables for credentials
+  - name: staging-bucket
+    bucketName: my-staging-cache
+    accessKeyIdEnv: STAGING_AWS_ACCESS_KEY_ID
+    secretAccessKeyEnv: STAGING_AWS_SECRET_ACCESS_KEY
+    region: us-east-1
+    forcePathStyle: false
+    timeout: 45
+
+  # Third bucket example - MinIO or S3-compatible storage
+  - name: minio-bucket
+    bucketName: nx-cache
+    accessKeyId: minioadmin
+    secretAccessKey: minioadmin
+    region: us-east-1
+    endpointUrl: http://localhost:9000
+    forcePathStyle: true  # Required for MinIO
+    timeout: 30
+
+  # Fourth bucket example - Using IAM roles (no explicit credentials)
+  - name: iam-bucket
+    bucketName: my-iam-cache
+    # When accessKeyId and secretAccessKey are omitted, the AWS SDK will automatically
+    # discover credentials from:
+    # - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+    # - AWS credentials file (~/.aws/credentials)
+    # - IAM role attached to EC2 instance or ECS task
+    # - AWS SSO
+    region: eu-west-1
+    forcePathStyle: false
+
+# Service Access Tokens
+# Each token represents a client/service that can access the cache
+serviceAccessTokens:
+  # CI/CD pipeline token - writes to production bucket with /ci prefix
+  - name: ci-2026-01
+    bucket: production-bucket
+    prefix: /ci
+    accessToken: your-bearer-token-for-ci
+    # Or use environment variable:
+    # accessTokenEnv: CI_ACCESS_TOKEN
+
+  # Another CI token using environment variable
+  - name: ci-2026-02
+    bucket: production-bucket
+    prefix: /ci
+    accessTokenEnv: CI_TOKEN_2
+
+  # Team-specific token - writes to production bucket with /team1 prefix
+  - name: team1-2026-01
+    bucket: production-bucket
+    prefix: /team1
+    accessToken: your-bearer-token-for-team1
+
+  # Development token - writes to staging bucket
+  - name: dev-2026-01
+    bucket: staging-bucket
+    prefix: /dev
+    accessTokenEnv: DEV_ACCESS_TOKEN
+
+  # Token without prefix - writes directly to bucket root
+  - name: root-access
+    bucket: production-bucket
+    prefix: ""
+    accessToken: root-token-value
+
+  # MinIO example
+  - name: local-dev
+    bucket: minio-bucket
+    prefix: /local
+    accessToken: local-dev-token
