@@ -43,23 +43,23 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            name: nx-cache-aws-${{ needs.validate.outputs.version }}-linux-x86_64
+            name: nx-cache-server-${{ needs.validate.outputs.version }}-linux-x86_64
 
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
-            name: nx-cache-aws-${{ needs.validate.outputs.version }}-linux-arm64
+            name: nx-cache-server-${{ needs.validate.outputs.version }}-linux-arm64
 
           - target: x86_64-apple-darwin
             os: macos-latest
-            name: nx-cache-aws-${{ needs.validate.outputs.version }}-macos-x86_64
+            name: nx-cache-server-${{ needs.validate.outputs.version }}-macos-x86_64
 
           - target: aarch64-apple-darwin
             os: macos-latest
-            name: nx-cache-aws-${{ needs.validate.outputs.version }}-macos-arm64
+            name: nx-cache-server-${{ needs.validate.outputs.version }}-macos-arm64
 
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            name: nx-cache-aws-${{ needs.validate.outputs.version }}-windows-x86_64.exe
+            name: nx-cache-server-${{ needs.validate.outputs.version }}-windows-x86_64.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -77,13 +77,13 @@ jobs:
 
       - name: Build release binary
         run: |
-          cargo build --release --bin nx-cache-aws --target ${{ matrix.target }}
+          cargo build --release --bin nx-cache-server --target ${{ matrix.target }}
 
       - name: Prepare binary for release
         uses: ./.github/actions/prepare-binary
         with:
           target: ${{ matrix.target }}
-          binary-name: nx-cache-aws
+          binary-name: nx-cache-server
           artifact-name: ${{ matrix.name }}
 
   create-tag-and-release:

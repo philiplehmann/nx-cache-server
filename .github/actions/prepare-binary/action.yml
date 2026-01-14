@@ -6,7 +6,7 @@ inputs:
     description: 'Target architecture (e.g., x86_64-unknown-linux-gnu)'
     required: true
   binary-name:
-    description: 'Name of the binary to prepare (e.g., nx-cache-aws)'
+    description: 'Name of the binary to prepare (e.g., nx-cache-server)'
     required: true
   artifact-name:
     description: 'Name for the uploaded artifact'

@@ -69,7 +69,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 #### Breaking Changes
-- **Removed legacy `nx-cache-aws` binary** - Use `nx-cache-server` with YAML config instead
+- **Removed legacy `nx-cache-server` binary** - Use `nx-cache-server` with YAML config instead
 - **Server architecture refactored** - Now uses `MultiStorageRouter` for multi-bucket support
 - **Middleware updated** - Authenticated token stored in request extensions for handler access
 - **AppState simplified** - No longer generic over storage provider type
@@ -169,7 +169,7 @@ serviceAccessTokens:
 export S3_BUCKET_NAME="my-cache"
 export AWS_REGION="us-west-2"
 export SERVICE_ACCESS_TOKEN="my-token"
-nx-cache-aws
+nx-cache-server
 ```
 
 **After:**
@@ -230,7 +230,7 @@ nx-cache-server --config config.yaml
 ## Compatibility
 
 - ✅ **Backward compatible at HTTP API level** - Nx clients require no changes
-- ❌ **Binary not backward compatible** - Must migrate from `nx-cache-aws` to `nx-cache-server`
+- ❌ **Binary not backward compatible** - Must migrate from `nx-cache-server` to `nx-cache-server`
 - ✅ **S3 data compatible** - Existing cache data accessible if using same bucket without prefix
 - ⚠️ **Prefix change requires cache rebuild** - New prefix = new cache namespace
 

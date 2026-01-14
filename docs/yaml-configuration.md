@@ -500,11 +500,11 @@ export NX_CLOUD_AUTH_TOKEN=your-token-from-config
 
 ## Migration from CLI Arguments
 
-If you're using the legacy `nx-cache-aws` binary with CLI arguments, here's how to migrate:
+If you're using the legacy `nx-cache-server` binary with CLI arguments, here's how to migrate:
 
 ### Before (CLI):
 ```bash
-nx-cache-aws \
+nx-cache-server \
   --bucket-name my-cache \
   --region us-west-2 \
   --service-access-token ci-token-123 \

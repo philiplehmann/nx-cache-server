@@ -115,7 +115,7 @@ export PORT="3000"                              # Server port (default: 3000)
 
 ##### Option B: Command Line Arguments
 ```bash
-./nx-cache-aws \
+./nx-cache-server \
   --region "your-aws-region" \
   --access-key-id "your-aws-access-key-id" \
   --secret-access-key "your-aws-secret-access-key" \
@@ -142,14 +142,14 @@ export SERVICE_ACCESS_TOKEN="my-token"  # Single token
 # OR: export SERVICE_ACCESS_TOKEN="frontend=token1,backend=token2"  # Multiple tokens
 
 # Specify other values via CLI
-./nx-cache-aws --port 8080
+./nx-cache-server --port 8080
 ```
 
 > **Note:** AWS credentials and region are optional when running on AWS infrastructure (EC2, ECS, Lambda) or when AWS config files are present. The server will auto-discover them from your environment.
 
 #### Step 4: Run the server
 ```bash
-./nx-cache-aws
+./nx-cache-server
 ```
 
 #### Step 5 (optional): Verify the service is up and running

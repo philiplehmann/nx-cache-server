@@ -25,7 +25,7 @@ runs:
       shell: bash
       run: |
         mkdir -p release-assets
-        find artifacts -name "nx-cache-aws*" -type f -exec cp {} release-assets/ \;
+        find artifacts -name "nx-cache-server*" -type f -exec cp {} release-assets/ \;
         cd release-assets
         sha256sum * > checksums.txt
 
@@ -39,7 +39,7 @@ runs:
         if [[ -z "$RELEASE_NOTES" ]]; then
           RELEASE_NOTES="Release ${{ inputs.version }}"
         fi
-        
+
         # Check if this is a prerelease version
         PRERELEASE_FLAG=""
         if [[ "${{ inputs.version }}" =~ -[a-zA-Z] ]]; then
@@ -48,7 +48,7 @@ runs:
         else
           echo "🚀 Creating stable release: ${{ inputs.version }}"
         fi
-        
+
         # Use heredoc to safely handle release notes with special characters
         gh release create "${{ inputs.version }}" --title "${{ inputs.version }}" --notes "$RELEASE_NOTES" $PRERELEASE_FLAG release-assets/*
 
@@ -61,8 +61,8 @@ runs:
         echo "**Tag:** [${{ inputs.version }}](https://github.com/${{ github.repository }}/releases/tag/${{ inputs.version }})" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📦 Release Assets:" >> $GITHUB_STEP_SUMMARY
-        echo "- **Linux x86_64:** \`nx-cache-aws-${{ inputs.version }}-linux-x86_64\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **macOS x86_64:** \`nx-cache-aws-${{ inputs.version }}-macos-x86_64\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **macOS ARM64:** \`nx-cache-aws-${{ inputs.version }}-macos-arm64\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Windows x86_64:** \`nx-cache-aws-${{ inputs.version }}-windows-x86_64.exe\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Linux x86_64:** \`nx-cache-server-${{ inputs.version }}-linux-x86_64\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **macOS x86_64:** \`nx-cache-server-${{ inputs.version }}-macos-x86_64\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **macOS ARM64:** \`nx-cache-server-${{ inputs.version }}-macos-arm64\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Windows x86_64:** \`nx-cache-server-${{ inputs.version }}-windows-x86_64.exe\`" >> $GITHUB_STEP_SUMMARY
         echo "- **Checksums:** \`checksums.txt\`" >> $GITHUB_STEP_SUMMARY
