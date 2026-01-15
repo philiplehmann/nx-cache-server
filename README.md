@@ -23,6 +23,18 @@ A lightweight, high-performance Nx cache server that bridges Nx CLI clients with
 
 Access to AWS S3 (or S3-compatible service like MinIO)
 
+### Development Setup
+
+If you want to build from source, you'll need Rust installed. We recommend using [asdf](https://asdf-vm.com/) for managing the Rust version:
+
+```bash
+# Install the Rust plugin
+asdf plugin add rust https://github.com/asdf-community/asdf-rust.git
+
+# Install the version specified in .tool-versions
+asdf install
+```
+
 ### Installation
 
 #### Step 1: Download the binary
