@@ -1,0 +1,357 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nx-cache
+
+---
+# ConfigMap for nx-cache-server configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nx-cache-config
+  namespace: nx-cache
+data:
+  config.yaml: |
+    port: 3000
+    debug: false
+
+    buckets:
+      - name: minio-local
+        bucketName: nx-cache
+        accessKeyId: minioadmin
+        secretAccessKey: minioadmin
+        endpointUrl: http://minio:9000
+        region: us-east-1
+        forcePathStyle: true
+        timeout: 30
+
+    serviceAccessTokens:
+      - name: ci-pipeline
+        bucket: minio-local
+        prefix: /ci
+        accessTokenEnv: CI_ACCESS_TOKEN
+
+      - name: dev-team
+        bucket: minio-local
+        prefix: /dev
+        accessTokenEnv: DEV_ACCESS_TOKEN
+
+      - name: local-dev
+        bucket: minio-local
+        prefix: /local
+        accessToken: local-dev-token-change-me
+
+      - name: team-shared
+        bucket: minio-local
+        prefix: /team
+        accessTokenEnv: TEAM_ACCESS_TOKEN
+
+---
+# Secret for access tokens
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nx-cache-tokens
+  namespace: nx-cache
+type: Opaque
+stringData:
+  CI_ACCESS_TOKEN: ci-secret-token-change-me
+  DEV_ACCESS_TOKEN: dev-secret-token-change-me
+  TEAM_ACCESS_TOKEN: team-secret-token-change-me
+
+---
+# MinIO PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: nx-cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# MinIO Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: nx-cache
+  labels:
+    app: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - name: minio
+        image: minio/minio:latest
+        args:
+        - server
+        - /data
+        - --console-address
+        - ":9001"
+        env:
+        - name: MINIO_ROOT_USER
+          value: minioadmin
+        - name: MINIO_ROOT_PASSWORD
+          value: minioadmin
+        ports:
+        - containerPort: 9000
+          name: api
+        - containerPort: 9001
+          name: console
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        livenessProbe:
+          httpGet:
+            path: /minio/health/live
+            port: 9000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /minio/health/ready
+            port: 9000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: minio-pvc
+
+---
+# MinIO Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: nx-cache
+  labels:
+    app: minio
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9000
+    targetPort: 9000
+    name: api
+  - port: 9001
+    targetPort: 9001
+    name: console
+  selector:
+    app: minio
+
+---
+# MinIO Service - NodePort for external access (optional)
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-external
+  namespace: nx-cache
+  labels:
+    app: minio
+spec:
+  type: NodePort
+  ports:
+  - port: 9000
+    targetPort: 9000
+    nodePort: 30900
+    name: api
+  - port: 9001
+    targetPort: 9001
+    nodePort: 30901
+    name: console
+  selector:
+    app: minio
+
+---
+# Job to create MinIO bucket
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-setup
+  namespace: nx-cache
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+      - name: wait-for-minio
+        image: busybox:latest
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z minio 9000; do
+            echo "Waiting for MinIO..."
+            sleep 2
+          done
+          echo "MinIO is ready"
+      containers:
+      - name: mc
+        image: minio/mc:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          mc alias set minio http://minio:9000 minioadmin minioadmin
+          mc mb minio/nx-cache --ignore-existing
+          mc anonymous set none minio/nx-cache
+          echo "MinIO bucket (nx-cache) created successfully"
+      activeDeadlineSeconds: 120
+
+---
+# nx-cache-server Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nx-cache-server
+  namespace: nx-cache
+  labels:
+    app: nx-cache-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nx-cache-server
+  template:
+    metadata:
+      labels:
+        app: nx-cache-server
+    spec:
+      containers:
+      - name: nx-cache-server
+        image: philiplehmann/nx-cache-server:latest
+        args:
+        - --config
+        - /app/config.yaml
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: CI_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: nx-cache-tokens
+              key: CI_ACCESS_TOKEN
+        - name: DEV_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: nx-cache-tokens
+              key: DEV_ACCESS_TOKEN
+        - name: TEAM_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: nx-cache-tokens
+              key: TEAM_ACCESS_TOKEN
+        volumeMounts:
+        - name: config
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+      volumes:
+      - name: config
+        configMap:
+          name: nx-cache-config
+
+---
+# nx-cache-server Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nx-cache-server
+  namespace: nx-cache
+  labels:
+    app: nx-cache-server
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    name: http
+  selector:
+    app: nx-cache-server
+
+---
+# nx-cache-server Service - NodePort for external access (optional)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nx-cache-server-external
+  namespace: nx-cache
+  labels:
+    app: nx-cache-server
+spec:
+  type: NodePort
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30300
+    name: http
+  selector:
+    app: nx-cache-server
+
+---
+# Optional: Ingress for nx-cache-server
+# Uncomment and configure for your ingress controller
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: nx-cache-server
+#   namespace: nx-cache
+#   annotations:
+#     kubernetes.io/ingress.class: nginx
+#     cert-manager.io/cluster-issuer: letsencrypt-prod
+# spec:
+#   tls:
+#   - hosts:
+#     - nx-cache.example.com
+#     secretName: nx-cache-tls
+#   rules:
+#   - host: nx-cache.example.com
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: nx-cache-server
+#             port:
+#               number: 3000

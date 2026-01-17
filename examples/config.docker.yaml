@@ -1,0 +1,49 @@
+# Nx Cache Server Configuration for Docker Compose with MinIO
+# This configuration is designed to work with the docker-compose.yaml setup
+
+port: 3000
+
+# Enable debug logging for development
+debug: false
+
+# MinIO bucket configuration
+buckets:
+  - name: minio-local
+    bucketName: nx-cache
+    # MinIO default credentials (matches docker-compose.yaml)
+    accessKeyId: minioadmin
+    secretAccessKey: minioadmin
+    # MinIO endpoint - use service name from docker-compose
+    endpointUrl: http://minio:9000
+    region: us-east-1
+    # Required for MinIO and most S3-compatible services
+    forcePathStyle: true
+    timeout: 30
+
+# Service Access Tokens
+# Configure tokens for different teams/environments
+serviceAccessTokens:
+  # CI/CD pipeline token
+  - name: ci-pipeline
+    bucket: minio-local
+    prefix: /ci
+    # Use environment variable for security
+    accessTokenEnv: CI_ACCESS_TOKEN
+
+  # Development team token
+  - name: dev-team
+    bucket: minio-local
+    prefix: /dev
+    accessTokenEnv: DEV_ACCESS_TOKEN
+
+  # Local development token (can be hardcoded for convenience)
+  - name: local-dev
+    bucket: minio-local
+    prefix: /local
+    accessToken: local-dev-token-change-me
+
+  # Shared team token example
+  - name: team-shared
+    bucket: minio-local
+    prefix: /team
+    accessTokenEnv: TEAM_ACCESS_TOKEN

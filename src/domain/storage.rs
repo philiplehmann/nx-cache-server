@@ -5,29 +5,30 @@ use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
-    #[error("Object not found")]
-    NotFound,
-    #[error("Object already exists")]
-    AlreadyExists,
-    #[error("Storage operation failed")]
-    OperationFailed,
+  #[error("Object not found")]
+  NotFound,
+  #[error("Object already exists")]
+  AlreadyExists,
+  #[error("Storage operation failed")]
+  OperationFailed,
 }
 
 #[async_trait]
 pub trait StorageProvider: Send + Sync + 'static {
-    /// Check if an object exists at the given hash key
-    async fn exists(&self, hash: &str) -> Result<bool, StorageError>;
+  /// Check if an object exists at the given hash key
+  async fn exists(&self, hash: &str) -> Result<bool, StorageError>;
 
-    /// Store data stream to storage at the given hash key
-    /// Returns error if object already exists
-    async fn store(
-        &self,
-        hash: &str,
-        data: ReaderStream<impl AsyncRead + Send + Unpin + 'static>,
-    ) -> Result<(), StorageError>;
+  /// Store data stream to storage at the given hash key
+  /// Returns error if object already exists
+  /// content_length: Optional content length for optimization (required by some storage backends)
+  async fn store(
+    &self,
+    hash: &str,
+    data: ReaderStream<impl AsyncRead + Send + Unpin + 'static>,
+    content_length: Option<u64>,
+  ) -> Result<(), StorageError>;
 
-    /// Retrieve object as a stream from storage
-    /// Returns NotFound error if object doesn't exist
-    async fn retrieve(&self, hash: &str)
-        -> Result<Box<dyn AsyncRead + Send + Unpin>, StorageError>;
+  /// Retrieve object as a stream from storage
+  /// Returns NotFound error if object doesn't exist
+  async fn retrieve(&self, hash: &str) -> Result<Box<dyn AsyncRead + Send + Unpin>, StorageError>;
 }

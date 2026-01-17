@@ -1,2 +1,2 @@
-pub mod aws;
+pub mod minio;
 pub mod multi_storage;

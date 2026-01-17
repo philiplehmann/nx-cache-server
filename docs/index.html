@@ -27,20 +27,6 @@
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'custom-blue': '#143055',
-                        'custom-light-blue': '#96BCDA'
-                    }
-                }
-            }
-        }
-    </script>
-
     <!-- Structured Data -->
     <script type="application/ld+json">
         {
@@ -56,299 +42,806 @@
             }
         }
     </script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #7c3aed;
+            --primary-light: #a78bfa;
+            --primary-dark: #5b21b6;
+            --accent-color: #14b8a6;
+            --accent-light: #5eead4;
+            --text-dark: #1f2937;
+            --text-light: #6b7280;
+            --bg-gray: #f9fafb;
+            --bg-white: #ffffff;
+            --border-color: #e5e7eb;
+            --code-bg: #f3f4f6;
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            background-color: var(--bg-gray);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        .container-narrow {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 4rem 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        header h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            line-height: 1.2;
+        }
+
+        header .tagline {
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            margin-bottom: 1.5rem;
+            font-weight: 300;
+        }
+
+        .badges {
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .badges img {
+            height: 20px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.875rem 1.75rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background-color: white;
+            color: var(--primary-color);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--bg-gray);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            color: white;
+            border-color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: white;
+            color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+
+        /* Sections */
+        section {
+            padding: 4rem 0;
+        }
+
+        section.bg-white {
+            background-color: var(--bg-white);
+        }
+
+        section.bg-alt {
+            background-color: var(--bg-gray);
+        }
+
+        section.border-b {
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-header h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            color: var(--text-dark);
+        }
+
+        .section-header p {
+            font-size: 1.25rem;
+            color: var(--text-light);
+        }
+
+        /* Description Section */
+        .description {
+            font-size: 1.25rem;
+            text-align: center;
+            max-width: 900px;
+            margin: 0 auto;
+            color: var(--text-dark);
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            border: 1px solid var(--border-color);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .feature-icon {
+            width: 3rem;
+            height: 3rem;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .feature-icon svg {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-dark);
+        }
+
+        .feature-card p {
+            color: var(--text-light);
+            line-height: 1.6;
+        }
+
+        .feature-card a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        .feature-card a:hover {
+            text-decoration: underline;
+        }
+
+        /* Info Boxes */
+        .info-box {
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            margin-bottom: 2rem;
+            border-left: 4px solid;
+        }
+
+        .info-box.primary {
+            background-color: #eff6ff;
+            border-color: var(--primary-color);
+        }
+
+        .info-box.secondary {
+            background-color: #f9fafb;
+            border-color: #6b7280;
+        }
+
+        .info-box h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-box.primary h3 {
+            color: var(--primary-color);
+        }
+
+        .info-box.secondary h3 {
+            color: var(--text-dark);
+        }
+
+        .info-box p {
+            color: var(--text-dark);
+            margin-bottom: 0;
+        }
+
+        /* Installation Section */
+        .installation-section {
+            margin-bottom: 3rem;
+        }
+
+        .installation-section h3 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--text-dark);
+        }
+
+        .installation-section h4 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+        }
+
+        .step {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            align-items: flex-start;
+        }
+
+        .step-number {
+            background-color: var(--primary-color);
+            color: white;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-content h3,
+        .step-content h4 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .step-content p {
+            margin-bottom: 1rem;
+            color: var(--text-light);
+        }
+
+        /* Code Blocks */
+        .code-block {
+            background-color: var(--code-bg);
+            padding: 1.25rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            border: 1px solid var(--border-color);
+        }
+
+        .code-block code {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.875rem;
+            color: var(--text-dark);
+            white-space: pre;
+            display: block;
+        }
+
+        code {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background-color: var(--code-bg);
+            padding: 0.125rem 0.375rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        /* Lists */
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        ul li {
+            padding-left: 1.5rem;
+            position: relative;
+            margin-bottom: 0.5rem;
+        }
+
+        ul li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: 700;
+        }
+
+        /* Content Card */
+        .content-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content-card h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .content-card h4 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin: 1.5rem 0 1rem;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            text-align: center;
+        }
+
+        .cta-section h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .cta-section p {
+            font-size: 1.25rem;
+            color: var(--accent-color);
+            margin-bottom: 1.5rem;
+        }
+
+        /* Footer */
+        footer {
+            background-color: #1f2937;
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+        }
+
+        footer p {
+            color: #9ca3af;
+        }
+
+        footer a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2.5rem;
+            }
+
+            header .tagline {
+                font-size: 1.25rem;
+            }
+
+            .section-header h2 {
+                font-size: 2rem;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            header h1 {
+                font-size: 2rem;
+            }
+
+            header .tagline {
+                font-size: 1rem;
+            }
+
+            section {
+                padding: 2rem 0;
+            }
+        }
+    </style>
 </head>
-<body class="bg-gray-50 text-gray-900">
+<body>
     <!-- Header -->
-    <header class="bg-custom-blue text-white">
-        <div class="container mx-auto px-6 py-12">
-            <div>
-                <h1 class="text-4xl md:text-6xl font-bold mb-4">Nx Custom Remote Cache Server</h1>
-                <p class="text-xl md:text-2xl text-custom-light-blue mb-6">
-                    A lightweight, high-performance Nx cache server built in Rust
-                </p>
-                <div class="mb-6 space-x-2">
-                    <img src="https://github.com/philiplehmann/nx-cache-server/actions/workflows/release.yml/badge.svg" alt="GitHub Actions Release Status Badge for Nx Cache Server" class="inline-block">
-                    <a href="https://github.com/philiplehmann/nx-cache-server" class="inline-block" aria-label="Star Nx Cache Server on GitHub">
-                        <img src="https://img.shields.io/badge/⭐-Star%20us%20on%20GitHub-blue?style=flat" alt="Star Nx Cache Server on GitHub" class="inline-block">
-                    </a>
-                </div>
-                <div class="space-x-4">
-                    <a href="https://github.com/philiplehmann/nx-cache-server/releases"
-                       class="bg-white text-custom-blue px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition duration-300 inline-block">
-                        Download Latest Release
-                    </a>
-                    <a href="https://github.com/philiplehmann/nx-cache-server"
-                       class="border border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white hover:text-custom-blue transition duration-300 inline-block">
-                        View on GitHub
-                    </a>
-                </div>
+    <header>
+        <div class="container">
+            <h1>Nx Custom Remote Cache Server</h1>
+            <p class="tagline">
+                Bridges Nx CLI clients with cloud storage providers for caching build artifacts
+            </p>
+            <div class="badges">
+                <img src="https://github.com/philiplehmann/nx-cache-server/actions/workflows/release.yml/badge.svg" alt="GitHub Actions Release Status Badge for Nx Cache Server">
+                <a href="https://github.com/philiplehmann/nx-cache-server" aria-label="Star Nx Cache Server on GitHub">
+                    <img src="https://img.shields.io/badge/⭐-Star%20us%20on%20GitHub-blue?style=flat" alt="Star Nx Cache Server on GitHub">
+                </a>
+            </div>
+            <div class="btn-group">
+                <a href="https://github.com/philiplehmann/nx-cache-server/releases" class="btn btn-primary">
+                    Download Latest Release
+                </a>
+                <a href="https://github.com/philiplehmann/nx-cache-server" class="btn btn-secondary">
+                    View on GitHub
+                </a>
             </div>
         </div>
     </header>
 
     <main>
         <!-- Description Section -->
-    <section class="py-12 bg-white border-b">
-        <div class="container mx-auto px-6">
-            <div class="max-w-4xl mx-auto text-center">
-                <p class="text-lg md:text-xl text-gray-700 leading-relaxed">
+        <section class="bg-white border-b">
+            <div class="container">
+                <p class="description">
                     A lightweight, high-performance Nx cache server that bridges Nx CLI clients with cloud storage providers for caching build artifacts. Built in Rust with a focus on maximum performance and minimal memory usage - less than 4MB during regular operation! 🚀
                 </p>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- Features Section -->
-    <section class="py-16">
-        <div class="container mx-auto px-6">
-            <div class="text-center mb-12">
-                <h2 class="text-3xl md:text-4xl font-bold mb-4">Features</h2>
-                <p class="text-lg text-gray-600">Built with performance and simplicity in mind</p>
+        <!-- Features Section -->
+        <section class="bg-alt">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Features</h2>
+                    <p>Built with performance and simplicity in mind</p>
+                </div>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
+                            </svg>
+                        </div>
+                        <h3>AWS S3 Integration</h3>
+                        <p>Direct streaming integration with AWS S3 and S3-compatible services</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                            </svg>
+                        </div>
+                        <h3>Multiple Backends</h3>
+                        <p>Support for multiple S3 buckets with flexible YAML configuration</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                            </svg>
+                        </div>
+                        <h3>Prefix-Based Isolation</h3>
+                        <p>Logical isolation within buckets using prefixes (e.g., /ci, /team1)</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                            </svg>
+                        </div>
+                        <h3>Multiple Service Tokens</h3>
+                        <p>Independent tokens with different bucket and prefix assignments</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 0 0 6.16-12.12A14.98 14.98 0 0 0 9.631 8.41m5.96 5.96a14.926 14.926 0 0 1-5.841 2.58m-.119-8.54a6 6 0 0 0-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 0 0-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 0 1-2.448-2.448 14.9 14.9 0 0 1 .06-.312m-2.24 2.39a4.493 4.493 0 0 0-1.757 4.306 4.493 4.493 0 0 0 4.306-1.758M16.5 9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+                            </svg>
+                        </div>
+                        <h3>High Performance</h3>
+                        <p>Built with Rust and Axum for maximum throughput</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                        <h3>Memory Efficient</h3>
+                        <p>Direct streaming with <strong>less than 4MB RAM</strong> usage during typical operation</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                            </svg>
+                        </div>
+                        <h3>Zero Dependencies</h3>
+                        <p>Self-contained single executable with no external dependencies required</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <h3>Nx API Compliant</h3>
+                        <p>Full implementation of the <a href="https://nx.dev/recipes/running-tasks/self-hosted-caching#build-your-own-caching-server">Nx custom remote cache OpenAPI specification</a></p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                        </div>
+                        <h3>Security First</h3>
+                        <p>Bearer token authentication with constant-time comparison</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                        </div>
+                        <h3>Self-Hosted & Private</h3>
+                        <p>Full control over your data with zero telemetry</p>
+                    </div>
+                </div>
             </div>
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300">
-                    <div class="w-12 h-12 bg-custom-blue text-white rounded-lg flex items-center justify-center mb-4">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-semibold mb-2">AWS S3 Integration</h3>
-                    <p class="text-gray-600">Direct streaming integration with AWS S3 and S3-compatible services</p>
-                </div>
-                <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300">
-                    <div class="w-12 h-12 bg-custom-blue text-white rounded-lg flex items-center justify-center mb-4">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-semibold mb-2">Memory Efficient</h3>
-                    <p class="text-gray-600">Direct streaming with <strong>less than 4MB RAM</strong> usage during typical operation</p>
-                </div>
-                <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300">
-                    <div class="w-12 h-12 bg-custom-blue text-white rounded-lg flex items-center justify-center mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 0 0 6.16-12.12A14.98 14.98 0 0 0 9.631 8.41m5.96 5.96a14.926 14.926 0 0 1-5.841 2.58m-.119-8.54a6 6 0 0 0-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 0 0-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 0 1-2.448-2.448 14.9 14.9 0 0 1 .06-.312m-2.24 2.39a4.493 4.493 0 0 0-1.757 4.306 4.493 4.493 0 0 0 4.306-1.758M16.5 9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-semibold mb-2">High Performance</h3>
-                    <p class="text-gray-600">Built with Rust and Axum for maximum throughput</p>
-                </div>
-                <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300">
-                    <div class="w-12 h-12 bg-custom-blue text-white rounded-lg flex items-center justify-center mb-4">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-semibold mb-2">Zero Dependencies</h3>
-                    <p class="text-gray-600">Self-contained single executable with no external dependencies required</p>
-                </div>
-                <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300">
-                    <div class="w-12 h-12 bg-custom-blue text-white rounded-lg flex items-center justify-center mb-4">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-semibold mb-2">Security First</h3>
-                    <p class="text-gray-600">Bearer token authentication with constant-time comparison</p>
-                </div>
-                <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300">
-                    <div class="w-12 h-12 bg-custom-blue text-white rounded-lg flex items-center justify-center mb-4">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-semibold mb-2">Self-Hosted & Private</h3>
-                    <p class="text-gray-600">Full control over your data with zero telemetry</p>
-                </div>
-            </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- Quick Start Section -->
-    <section class="bg-white py-16">
-        <div class="container mx-auto px-6">
-            <div class="text-center mb-12">
-                <h2 class="text-3xl md:text-4xl font-bold mb-4">Quick Start</h2>
-                <p class="text-lg text-gray-600">Get up and running in minutes</p>
-            </div>
-            <div class="max-w-4xl mx-auto">
-                <!-- Prerequisites -->
-                <div class="bg-blue-50 border-l-4 border-custom-blue p-6 mb-8">
-                    <h3 class="text-lg font-semibold text-custom-blue mb-2">Prerequisites</h3>
-                    <p class="text-gray-700">Access to AWS S3 (or S3-compatible service like MinIO)</p>
+        <!-- Quick Start Section -->
+        <section class="bg-white">
+            <div class="container-narrow">
+                <div class="section-header">
+                    <h2>Quick Start</h2>
+                    <p>Get up and running in minutes</p>
                 </div>
 
-                <div class="space-y-8">
-                    <!-- Step 1 -->
-                    <div class="flex items-start space-x-4">
-                        <div class="bg-custom-blue text-white w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold">1</div>
-                        <div class="flex-1 overflow-auto">
-                            <h3 class="text-xl font-semibold mb-2">Download the binary</h3>
-                            <p class="text-gray-600 mb-4">Go to the <a href="https://github.com/philiplehmann/nx-cache-server/releases" class="text-blue-600 hover:underline">Releases page</a> and download the binary for your operating system.</p>
-                            <p class="text-gray-600 mb-4">Alternatively, use command line tools:</p>
-                            <div class="space-y-3 overflow-auto">
-                                <div class="bg-gray-100 p-4 rounded-lg overflow-x-auto overflow-auto">
-                                    <p class="text-sm text-gray-600 mb-2"># Using curl</p>
-                                    <code class="text-sm text-gray-800 block whitespace-pre">curl -L https://github.com/philiplehmann/nx-cache-server/releases/download/&lt;VERSION&gt;/nx-cache-server-&lt;VERSION&gt;-&lt;PLATFORM&gt; -o nx-cache-server</code>
-                                </div>
-                                <div class="bg-gray-100 p-4 rounded-lg overflow-x-auto overflow-auto">
-                                    <p class="text-sm text-gray-600 mb-2"># Using wget</p>
-                                    <code class="text-sm text-gray-800 block whitespace-pre">wget https://github.com/philiplehmann/nx-cache-server/releases/download/&lt;VERSION&gt;/nx-cache-server-&lt;VERSION&gt;-&lt;PLATFORM&gt; -O nx-cache-server</code>
-                                </div>
-                            </div>
-                            <p class="text-sm text-gray-600 mt-3">Replace: <code>&lt;VERSION&gt;</code> with the version tag (e.g., v1.1.0), <code>&lt;PLATFORM&gt;</code> with your platform (e.g., linux-x86_64, macos-arm64, macos-x86_64, windows-x86_64.exe)</p>
-                        </div>
+                <div class="info-box primary">
+                    <h3>Prerequisites</h3>
+                    <p>Access to S3-compatible services</p>
+                </div>
+
+                <div class="info-box secondary">
+                    <h3>Development Setup</h3>
+                    <p>If you want to build from source, you'll need Rust installed. We recommend using <a href="https://asdf-vm.com/">asdf</a> for managing the Rust version:</p>
+                    <div class="code-block">
+                        <code># Install the Rust plugin
+asdf plugin add rust https://github.com/asdf-community/asdf-rust.git
+
+# Install the version specified in .tool-versions
+asdf install</code>
                     </div>
-                    <!-- Step 2 -->
-                    <div class="flex items-start space-x-4">
-                        <div class="bg-custom-blue text-white w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold">2</div>
-                        <div class="flex-1">
-                            <h3 class="text-xl font-semibold mb-2">Make executable (Linux/macOS only)</h3>
-                            <div class="bg-gray-100 p-4 rounded-lg overflow-x-auto">
-                                <code class="text-sm text-gray-800 block whitespace-pre">chmod +x nx-cache-server</code>
+                </div>
+
+                <div class="installation-section">
+                    <h3>Installation</h3>
+
+                    <h4>Binary</h4>
+
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4>Download the binary</h4>
+                            <p>Go to <a href="https://github.com/philiplehmann/nx-cache-server/releases">Releases page</a> and download the binary for your operating system.</p>
+                            <p>Alternatively, use command line tools:</p>
+                            <div class="code-block">
+                                <code># Download the binary
+curl -L https://github.com/philiplehmann/nx-cache-server/releases/download/&lt;VERSION&gt;/nx-cache-server-&lt;VERSION&gt;-&lt;PLATFORM&gt; -o nx-cache-server
+
+# Replace:
+#  &lt;VERSION&gt; with the version tag (e.g., v1.1.0)
+#  &lt;PLATFORM&gt; with your platform (e.g., linux-x86_64, macos-arm64, macos-x86_64, windows-x86_64.exe).</code>
                             </div>
                         </div>
                     </div>
-                    <!-- Step 3 -->
-                    <div class="flex items-start space-x-4">
-                        <div class="bg-custom-blue text-white w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold">3</div>
-                        <div class="flex-1 overflow-auto">
-                            <h3 class="text-xl font-semibold mb-2">Configure the server</h3>
-                            <p class="text-gray-600 mb-4">The server supports three configuration methods that can be used independently or combined:</p>
 
-                            <!-- Option A -->
-                            <div class="mb-6 overflow-auto">
-                                <h4 class="text-lg font-semibold mb-3">Option A: Environment Variables (Recommended)</h4>
-                                <div class="bg-gray-100 p-4 rounded-lg overflow-x-auto">
-                                    <code class="text-sm text-gray-800 block whitespace-pre"># Required
-export S3_BUCKET_NAME="your-s3-bucket-name"
-export SERVICE_ACCESS_TOKEN="your-bearer-token"
-
-# AWS Credentials (optional - auto-discovered from IAM roles, config files, SSO if not provided)
-export AWS_ACCESS_KEY_ID="your-aws-access-key-id"
-export AWS_SECRET_ACCESS_KEY="your-aws-secret-access-key"
-export AWS_SESSION_TOKEN="your-session-token"  # If you are using temporary credentials
-
-# AWS Region (optional - auto-discovered from AWS config, EC2/ECS metadata if not provided)
-export AWS_REGION="us-west-2"
-
-# Optional
-export S3_ENDPOINT_URL="your-s3-endpoint-url"   # For S3-compatible services like MinIO
-export S3_TIMEOUT="30"                          # S3 operation timeout in seconds (default: 30)
-export PORT="3000"                              # Server port (default: 3000)</code>
-                                </div>
-                            </div>
-
-                            <!-- Option B -->
-                            <div class="mb-6 overflow-auto">
-                                <h4 class="text-lg font-semibold mb-3">Option B: Command Line Arguments</h4>
-                                <div class="bg-gray-100 p-4 rounded-lg overflow-x-auto">
-                                    <code class="text-sm text-gray-800 block whitespace-pre">./nx-cache-server \
-  --bucket-name "your-s3-bucket-name" \
-  --service-access-token "your-bearer-token" \
-  --region "your-aws-region" \
-  --access-key-id "your-aws-access-key-id" \
-  --secret-access-key "your-aws-secret-access-key" \
-  --session-token "your-session-token" \
-  --endpoint-url "your-s3-endpoint-url" \
-  --timeout-seconds 30 \
-  --port 3000</code>
-                                </div>
-                            </div>
-
-                            <!-- Option C -->
-                            <div class="mb-6 overflow-auto">
-                                <h4 class="text-lg font-semibold mb-3">Option C: Mixed Configuration</h4>
-                                <p class="text-gray-600 mb-3">You can also combine both methods. Command line arguments will override environment variables:</p>
-                                <div class="bg-gray-100 p-4 rounded-lg overflow-x-auto">
-                                    <code class="text-sm text-gray-800 block whitespace-pre"># Set common config via environment
-export AWS_REGION="us-west-2"
-export S3_BUCKET_NAME="my-cache-bucket"
-export SERVICE_ACCESS_TOKEN="my-secure-token"
-
-# Specify other values via CLI
-./nx-cache-server --port 8080</code>
-                                </div>
-                                <div class="bg-blue-50 border-l-4 border-custom-blue p-4 mt-4">
-                                    <p class="text-sm text-gray-700"><strong>Note:</strong> AWS credentials and region are optional when running on AWS infrastructure (EC2, ECS, Lambda) or when AWS config files are present. The server will auto-discover them from your environment.</p>
-                                </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4>Make executable (Linux/macOS only)</h4>
+                            <div class="code-block">
+                                <code>chmod +x nx-cache-server</code>
                             </div>
                         </div>
                     </div>
-                    <!-- Step 4 -->
-                    <div class="flex items-start space-x-4">
-                        <div class="bg-custom-blue text-white w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold">4</div>
-                        <div class="flex-1">
-                            <h3 class="text-xl font-semibold mb-2">Run the server</h3>
-                            <div class="bg-gray-100 p-4 rounded-lg overflow-x-auto">
-                                <code class="text-sm text-gray-800 block whitespace-pre">./nx-cache-server</code>
+
+                    <h4>Docker</h4>
+
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4>Pull the image</h4>
+                            <div class="code-block">
+                                <code>docker pull philiplehmann/nx-cache-server:&lt;VERSION&gt;</code>
                             </div>
                         </div>
                     </div>
-                    <!-- Step 5 -->
-                    <div class="flex items-start space-x-4">
-                        <div class="bg-custom-blue text-white w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold">5</div>
-                        <div class="flex-1">
-                            <h3 class="text-xl font-semibold mb-2">Verify the service (optional)</h3>
-                            <p class="text-gray-600 mb-3">Check that the server is up and running:</p>
-                            <div class="bg-gray-100 p-4 rounded-lg overflow-x-auto">
-                                <code class="text-sm text-gray-800 block whitespace-pre">curl http://localhost:3000/health</code>
+
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4>Run the container</h4>
+                            <div class="code-block">
+                                <code>docker run -p 3000:3000 \
+  -e CI_ACCESS_TOKEN=your-secret-token \
+  -v /path/to/config.yaml:/nx-cache-server/config.yaml \
+  philiplehmann/nx-cache-server:&lt;VERSION&gt;</code>
                             </div>
-                            <p class="text-gray-600 mt-3">You should receive an "OK" response.</p>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- Client Configuration Section -->
-    <section class="py-16 bg-gray-100">
-        <div class="container mx-auto px-6">
-            <div class="text-center mb-12">
-                <h2 class="text-3xl md:text-4xl font-bold mb-4">Client Configuration</h2>
-                <p class="text-lg text-gray-600">Configure your Nx workspace to use the cache server</p>
+        <!-- Configuration Section -->
+        <section class="bg-alt">
+            <div class="container-narrow">
+                <div class="section-header">
+                    <h2>Configuration</h2>
+                    <p>Configure the server using YAML</p>
+                </div>
+
+                <div class="content-card">
+                    <h3>YAML Configuration</h3>
+                    <p><strong>Features:</strong></p>
+                    <ul>
+                        <li>Multiple S3 buckets as backends</li>
+                        <li>Multiple service tokens with independent bucket assignments</li>
+                        <li>Prefix-based isolation (e.g., /ci, /team1)</li>
+                        <li>Environment variable substitution for secrets</li>
+                        <li>Flexible credential management</li>
+                    </ul>
+
+                    <p style="margin-top: 1rem;">Create a <code>config.yaml</code> file:</p>
+                    <div class="code-block">
+                        <code>port: 3000
+
+buckets:
+  - name: production
+    bucketName: my-nx-cache
+    region: us-west-2
+
+serviceAccessTokens:
+  - name: ci-pipeline
+    bucket: production
+    prefix: /ci
+    accessTokenEnv: CI_ACCESS_TOKEN</code>
+                    </div>
+
+                    <p>Set environment variables and run:</p>
+                    <div class="code-block">
+                        <code>export CI_ACCESS_TOKEN=your-secret-token
+nx-cache-server --config config.yaml</code>
+                    </div>
+
+                    <div class="info-box primary">
+                        <p><strong>📋 Example Configurations</strong> - Ready-to-use configuration files:</p>
+                        <ul style="margin-top: 0.5rem;">
+                            <li><a href="https://github.com/philiplehmann/nx-cache-server/blob/main/examples/config.minimal.yaml">config.minimal.yaml</a> - Simplest setup for quick start</li>
+                            <li><a href="https://github.com/philiplehmann/nx-cache-server/blob/main/examples/config.example.yaml">config.example.yaml</a> - Comprehensive example with all options</li>
+                            <li><a href="https://github.com/philiplehmann/nx-cache-server/blob/main/examples/docker-compose.yaml">docker-compose.yaml</a> - Docker Compose example with all options</li>
+                            <li><a href="https://github.com/philiplehmann/nx-cache-server/blob/main/examples/kustomize.yaml">kustomize.yaml</a> - Kubernetes example with all options</li>
+                        </ul>
+                    </div>
+
+                    <h4>Verify the service is up and running (optional)</h4>
+                    <div class="code-block">
+                        <code>curl http://localhost:3000/health</code>
+                    </div>
+                    <p style="color: var(--text-light);">You should receive an "OK" response.</p>
+                </div>
             </div>
-            <div class="max-w-3xl mx-auto">
-                <div class="bg-white p-6 rounded-lg shadow-md">
-                    <h3 class="text-xl font-semibold mb-4">Environment Variables</h3>
-                    <div class="bg-gray-100 p-4 rounded-lg overflow-x-auto">
-                        <code class="text-sm text-gray-800 block whitespace-pre"># Point Nx to your cache server
+        </section>
+
+        <!-- Client Configuration Section -->
+        <section class="bg-white">
+            <div class="container-narrow">
+                <div class="section-header">
+                    <h2>Client Configuration</h2>
+                    <p>Configure your Nx workspace to use the cache server</p>
+                </div>
+
+                <div class="content-card">
+                    <h3>Environment Variables</h3>
+                    <div class="code-block">
+                        <code># Point Nx to your cache server
 export NX_SELF_HOSTED_REMOTE_CACHE_SERVER="http://localhost:3000"
 
-# Authentication token (must match SERVICE_ACCESS_TOKEN from server config)
-export NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN="your-bearer-token"
+# Authentication token (must match one of the tokens from SERVICE_ACCESS_TOKENS on the server)
+export NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN="token1"
 
 # Optional: Disable TLS certificate validation (e.g. for development/testing environment)
 export NODE_TLS_REJECT_UNAUTHORIZED="0"</code>
                     </div>
-                    <p class="text-gray-600 mt-4">Once configured, Nx will automatically use your cache server for storing and retrieving build artifacts.</p>
-                    <p class="text-gray-600 mt-2">For more details, see the <a href="https://nx.dev/recipes/running-tasks/self-hosted-caching#usage-notes" class="text-blue-600 hover:underline">Nx documentation</a>.</p>
+                    <p style="color: var(--text-light);">Once configured, Nx will automatically use your cache server for storing and retrieving build artifacts.</p>
+                    <p style="color: var(--text-light);">For more details, see the <a href="https://nx.dev/recipes/running-tasks/self-hosted-caching#usage-notes">Nx documentation</a>.</p>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- Stay Updated Section -->
-    <section class="py-16 bg-custom-blue text-white">
-        <div class="container mx-auto px-6 text-center">
-            <h2 class="text-3xl md:text-4xl font-bold mb-4">Stay Updated</h2>
-            <p class="text-xl text-custom-light-blue mb-6">Watch this repository to get notified about new releases!</p>
-            <a href="https://github.com/philiplehmann/nx-cache-server"
-               class="bg-white text-custom-blue px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition duration-300 inline-block">
-                Watch on GitHub
-            </a>
-        </div>
-    </section>
+        <!-- Stay Updated Section -->
+        <section class="cta-section">
+            <div class="container">
+                <h2>Stay Updated</h2>
+                <p>Watch this repository to get notified about new releases!</p>
+                <a href="https://github.com/philiplehmann/nx-cache-server" class="btn btn-primary">
+                    Watch on GitHub
+                </a>
+            </div>
+        </section>
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 text-white py-8">
-        <div class="container mx-auto px-6 text-center">
-            <p class="text-gray-400">
+    <footer>
+        <div class="container">
+            <p>
                 Built with ❤️ in Rust |
-                <a href="https://github.com/philiplehmann/nx-cache-server" class="text-custom-light-blue hover:underline">GitHub</a> |
-                <a href="https://github.com/philiplehmann/nx-cache-server/releases" class="text-custom-light-blue hover:underline">Releases</a>
+                <a href="https://github.com/philiplehmann/nx-cache-server">GitHub</a> |
+                <a href="https://github.com/philiplehmann/nx-cache-server/releases">Releases</a>
             </p>
         </div>
     </footer>

@@ -1,0 +1,21 @@
+# Rust formatting configuration
+# Use 2 spaces instead of default 4
+
+# Indentation (stable)
+tab_spaces = 2
+hard_tabs = false
+
+# Line length (stable)
+max_width = 100
+
+# Use field init shorthand (stable)
+use_field_init_shorthand = true
+
+# Chain formatting (stable)
+chain_width = 60
+
+# Match formatting (stable)
+match_block_trailing_comma = true
+
+# Misc (stable)
+edition = "2021"
