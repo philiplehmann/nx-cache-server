@@ -30,7 +30,11 @@ pub async fn store_artifact(
 
   // Check if artifact already exists
   if state.storage.exists_with_token(&token.0, &hash).await? {
-    return Ok((StatusCode::CONFLICT, "Cannot override an existing record"));
+    return Ok((
+      StatusCode::CONFLICT,
+      [("Content-Type", "text/plain")],
+      "Cannot override an existing record",
+    ));
   }
 
   // convert body directly to AsyncRead without buffering
@@ -47,7 +51,7 @@ pub async fn store_artifact(
     .store_with_token(&token.0, &hash, reader_stream, content_length)
     .await?;
 
-  Ok((StatusCode::OK, ""))
+  Ok((StatusCode::OK, [("Content-Type", "text/plain")], ""))
 }
 
 pub async fn retrieve_artifact(

@@ -3,7 +3,7 @@ use axum::{
   extract::{Request, State},
   http::StatusCode,
   middleware::Next,
-  response::Response,
+  response::{IntoResponse, Response},
 };
 use subtle::ConstantTimeEq;
 use tracing;
@@ -16,7 +16,7 @@ pub async fn auth_middleware(
   State(state): State<AppState>,
   mut request: Request,
   next: Next,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, Response> {
   // Extract Bearer token from Authorization header
   let token = request
     .headers()
@@ -26,7 +26,16 @@ pub async fn auth_middleware(
 
   let token = match token {
     Some(t) => t,
-    None => return Err(StatusCode::UNAUTHORIZED),
+    None => {
+      return Err(
+        (
+          StatusCode::UNAUTHORIZED,
+          [("Content-Type", "text/plain")],
+          "Unauthorized",
+        )
+          .into_response(),
+      )
+    },
   };
 
   // Check token against all configured tokens using constant-time comparison
@@ -59,7 +68,14 @@ pub async fn auth_middleware(
     },
     None => {
       tracing::warn!("Authentication failed: invalid token");
-      Err(StatusCode::UNAUTHORIZED)
+      Err(
+        (
+          StatusCode::UNAUTHORIZED,
+          [("Content-Type", "text/plain")],
+          "Unauthorized",
+        )
+          .into_response(),
+      )
     },
   }
 }
