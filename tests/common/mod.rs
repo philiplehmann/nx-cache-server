@@ -10,7 +10,8 @@ use minio::s3::Client;
 use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::minio::MinIO;
 
-use nx_cache_server::infra::minio::{MinioStorage, MinioStorageConfig};
+use nx_cache_server::domain::yaml_config::ResolvedBucketConfig;
+use nx_cache_server::infra::minio::MinioStorage;
 
 /// MinIO test container wrapper with helper methods
 #[allow(dead_code)]
@@ -49,14 +50,17 @@ impl MinioTestContainer {
 
   /// Create a storage config for this MinIO instance
   #[allow(dead_code)]
-  pub fn create_storage_config(&self, bucket_name: String) -> MinioStorageConfig {
-    MinioStorageConfig {
-      endpoint: self.endpoint_url(),
-      access_key: self.access_key.clone(),
-      secret_key: self.secret_key.clone(),
+  pub fn create_storage_config(&self, bucket_name: String) -> ResolvedBucketConfig {
+    ResolvedBucketConfig {
+      name: "test".to_string(),
       bucket_name,
-      region: "us-east-1".to_string(),
-      use_ssl: false,
+      access_key_id: Some(self.access_key.clone()),
+      secret_access_key: Some(self.secret_key.clone()),
+      session_token: None,
+      region: Some("us-east-1".to_string()),
+      endpoint_url: Some(self.endpoint_url()),
+      force_path_style: true,
+      timeout: 30,
     }
   }
 
@@ -98,7 +102,7 @@ impl MinioTestContainer {
     let config = self.create_storage_config(bucket_name.to_string());
 
     // Create MinioStorage instance
-    MinioStorage::new(&config)
+    MinioStorage::from_resolved_bucket(&config)
       .await
       .map_err(|e| format!("Failed to create MinioStorage: {:?}", e).into())
   }

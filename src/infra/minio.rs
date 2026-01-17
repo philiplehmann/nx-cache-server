@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use clap::Parser;
 use minio::s3::builders::ObjectContent;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
@@ -11,72 +10,9 @@ use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
 
 use crate::domain::{
-  config::{ConfigError, ConfigValidator},
   storage::{StorageError, StorageProvider},
   yaml_config::ResolvedBucketConfig,
 };
-
-#[derive(Parser, Debug, Clone)]
-pub struct MinioStorageConfig {
-  #[arg(
-    long,
-    env = "MINIO_ENDPOINT",
-    help = "MinIO endpoint URL (e.g., http://localhost:9000 or https://minio.example.com)"
-  )]
-  pub endpoint: String,
-
-  #[arg(long, env = "MINIO_ACCESS_KEY", help = "MinIO access key ID")]
-  pub access_key: String,
-
-  #[arg(long, env = "MINIO_SECRET_KEY", help = "MinIO secret access key")]
-  pub secret_key: String,
-
-  #[arg(
-    long,
-    env = "MINIO_BUCKET_NAME",
-    help = "MinIO bucket name for cache storage"
-  )]
-  pub bucket_name: String,
-
-  #[arg(
-    long,
-    env = "MINIO_REGION",
-    default_value = "us-east-1",
-    help = "MinIO region (default: us-east-1)"
-  )]
-  pub region: String,
-
-  #[arg(
-    long,
-    env = "MINIO_USE_SSL",
-    default_value = "false",
-    help = "Use SSL/TLS for MinIO connection"
-  )]
-  pub use_ssl: bool,
-}
-
-impl ConfigValidator for MinioStorageConfig {
-  async fn validate(&self) -> Result<(), ConfigError> {
-    if self.endpoint.is_empty() {
-      return Err(ConfigError::MissingField("MINIO_ENDPOINT"));
-    }
-    if !self.endpoint.starts_with("http://") && !self.endpoint.starts_with("https://") {
-      return Err(ConfigError::Invalid(
-        "MinIO endpoint URL must start with http:// or https://",
-      ));
-    }
-    if self.access_key.is_empty() {
-      return Err(ConfigError::MissingField("MINIO_ACCESS_KEY"));
-    }
-    if self.secret_key.is_empty() {
-      return Err(ConfigError::MissingField("MINIO_SECRET_KEY"));
-    }
-    if self.bucket_name.is_empty() {
-      return Err(ConfigError::MissingField("MINIO_BUCKET_NAME"));
-    }
-    Ok(())
-  }
-}
 
 #[derive(Clone)]
 pub struct MinioStorage {
@@ -85,26 +21,6 @@ pub struct MinioStorage {
 }
 
 impl MinioStorage {
-  pub async fn new(config: &MinioStorageConfig) -> Result<Self, StorageError> {
-    let base_url = BaseUrl::from_str(&config.endpoint).map_err(|e| {
-      tracing::error!("Invalid MinIO endpoint URL: {:?}", e);
-      StorageError::OperationFailed
-    })?;
-
-    let static_provider = StaticProvider::new(&config.access_key, &config.secret_key, None);
-
-    let client =
-      Client::new(base_url, Some(Box::new(static_provider)), None, None).map_err(|e| {
-        tracing::error!("Failed to create MinIO client: {:?}", e);
-        StorageError::OperationFailed
-      })?;
-
-    Ok(Self {
-      client,
-      bucket_name: config.bucket_name.clone(),
-    })
-  }
-
   /// Create MinioStorage from a resolved bucket configuration
   pub async fn from_resolved_bucket(
     bucket_config: &ResolvedBucketConfig,
