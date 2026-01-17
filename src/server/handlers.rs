@@ -47,7 +47,7 @@ pub async fn store_artifact(
     .store_with_token(&token.0, &hash, reader_stream, content_length)
     .await?;
 
-  Ok((StatusCode::ACCEPTED, ""))
+  Ok((StatusCode::OK, ""))
 }
 
 pub async fn retrieve_artifact(

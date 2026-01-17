@@ -48,6 +48,7 @@ impl MinioTestContainer {
   }
 
   /// Create a storage config for this MinIO instance
+  #[allow(dead_code)]
   pub fn create_storage_config(&self, bucket_name: String) -> MinioStorageConfig {
     MinioStorageConfig {
       endpoint: self.endpoint_url(),
@@ -82,6 +83,7 @@ impl MinioTestContainer {
   }
 
   /// Create a bucket and return a configured MinioStorage instance
+  #[allow(dead_code)]
   pub async fn create_storage(
     &self,
     bucket_name: &str,

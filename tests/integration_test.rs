@@ -1,20 +1,22 @@
-//! Integration tests using the common MinIO testcontainer helpers
+//! Storage Layer Integration Tests
 //!
-//! ## Known Issue
+//! These tests validate the storage layer (domain/storage) directly, testing S3 operations
+//! with MinIO via testcontainers. For HTTP API tests that validate compliance with the
+//! Nx OpenAPI specification, see `api_integration_test.rs`.
 //!
-//! These tests currently fail due to a checksum mismatch error when using streaming
-//! PutObject operations with MinIO:
+//! ## Test Scope
 //!
-//! ```
-//! XAmzContentSHA256Mismatch: The provided 'x-amz-content-sha256' header does not match
-//! what was computed.
-//! ```
+//! - Direct storage operations (store, retrieve, exists)
+//! - S3 backend functionality with MinIO
+//! - Multi-namespace support with prefixes
+//! - Error handling (NotFound, AlreadyExists)
+//! - Large file streaming
+//! - Connection verification
 //!
-//! The issue occurs because the AWS SDK computes checksums on streaming request bodies,
-//! but the channel-based streaming approach (ReaderStream → Channel → ByteStream) used
-//! in `S3Storage::store()` causes the checksum computation to fail.
+//! ## Known Issue (Resolved)
 //!
-//! See `debug_minio.rs` for an isolated reproduction of the issue.
+//! Previous checksum mismatch errors with MinIO streaming uploads have been resolved.
+//! The storage layer now correctly handles streaming PutObject operations.
 
 mod common;
 
