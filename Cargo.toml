@@ -14,7 +14,6 @@ tokio = { version = "1.49", features = ["rt-multi-thread", "net", "io-util", "ma
 tokio-stream = "0.1"
 axum = "0.8"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 serde_yml = "0.0.12"
 clap = { version = "4.5", features = ["derive", "env"] }
 async-trait = "0.1"
@@ -24,14 +23,11 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 thiserror = "2.0"
 subtle = "2.6"
 minio = "0.3"
-bytes = "1.11"
 futures-util = { version = "0.3", default-features = false, features = ["std", "io"] }
 
 [dev-dependencies]
 testcontainers = { version = "0.26", features = ["blocking"] }
 testcontainers-modules = { version = "0.14", features = ["minio"] }
-tokio-test = "0.4"
-tempfile = "3.24"
 tower = "0.5"
 
 [profile.release]
