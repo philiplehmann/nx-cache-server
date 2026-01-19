@@ -6,8 +6,7 @@ use minio::s3::types::S3Api;
 use minio::s3::Client;
 use std::str::FromStr;
 use tokio::io::AsyncRead;
-use tokio_stream::StreamExt;
-use tokio_util::io::ReaderStream;
+use tokio_util::io::{ReaderStream, StreamReader};
 
 use crate::domain::{
   storage::{StorageError, StorageProvider},
@@ -92,32 +91,14 @@ impl StorageProvider for MinioStorage {
     &self,
     hash: &str,
     data: ReaderStream<impl AsyncRead + Send + Unpin + 'static>,
-    _content_length: Option<u64>,
+    content_length: Option<u64>,
   ) -> Result<(), StorageError> {
     if self.exists(hash).await? {
       return Err(StorageError::AlreadyExists);
     }
 
-    // Convert ReaderStream to Vec<u8> for MinIO client
-    // The MinIO client's put_object_content expects ObjectContent which can be created from Vec<u8>
-    let mut buffer = Vec::new();
-    let mut pinned_data = std::pin::pin!(data);
+    let content = ObjectContent::new_from_stream(data, content_length);
 
-    loop {
-      match pinned_data.next().await {
-        Some(Ok(bytes)) => buffer.extend_from_slice(&bytes),
-        Some(Err(e)) => {
-          tracing::error!("Error reading stream data: {:?}", e);
-          return Err(StorageError::OperationFailed);
-        },
-        None => break,
-      }
-    }
-
-    // Create ObjectContent from Vec<u8>
-    let content = ObjectContent::from(buffer);
-
-    // Use put_object_content for uploading
     self
       .client
       .put_object_content(&self.bucket_name, hash, content)
@@ -148,16 +129,13 @@ impl StorageProvider for MinioStorage {
         }
       })?;
 
-    // GetObjectResponse has a 'content' field of type ObjectContent
-    // Convert to bytes and return as Cursor
-    let segmented = response.content.to_segmented_bytes().await.map_err(|e| {
-      tracing::error!("Error converting MinIO response content: {:?}", e);
+    let (stream, _size) = response.content.to_stream().await.map_err(|e| {
+      tracing::error!("Error streaming MinIO response content: {:?}", e);
       StorageError::OperationFailed
     })?;
 
-    let bytes = segmented.to_bytes();
-    use std::io::Cursor;
-    Ok(Box::new(Cursor::new(bytes.to_vec())))
+    let reader = StreamReader::new(stream);
+    Ok(Box::new(reader))
   }
 }
 
