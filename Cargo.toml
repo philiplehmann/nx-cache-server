@@ -26,8 +26,8 @@ minio = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["std", "io"] }
 
 [dev-dependencies]
-testcontainers = { version = "0.26", features = ["blocking"] }
-testcontainers-modules = { version = "0.14", features = ["minio"] }
+testcontainers = { version = "0.27.0", features = ["blocking"] }
+testcontainers-modules = { version = "0.15.0", features = ["minio"] }
 tower = "0.5"
 
 [profile.release]
