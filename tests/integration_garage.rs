@@ -1,10 +1,7 @@
 mod common;
 use common::storage_contract::{
-  run_duplicate_store_fails,
-  run_helper_operations_contract,
-  run_large_file_streaming,
-  run_retrieve_nonexistent_fails,
-  run_store_and_retrieve,
+  run_duplicate_store_fails, run_helper_operations_contract, run_large_file_streaming,
+  run_retrieve_nonexistent_fails, run_store_and_retrieve,
 };
 use common::GarageTestContainer;
 

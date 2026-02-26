@@ -14,11 +14,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tokio::net::TcpStream;
-use tokio::sync::Mutex;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{core::ContainerPort, core::ExecCommand, core::Mount, GenericImage, ImageExt};
 use testcontainers_modules::minio::MinIO;
+use tokio::net::TcpStream;
+use tokio::sync::Mutex;
 
 use nx_cache_server::domain::storage::StorageProvider;
 use nx_cache_server::domain::yaml_config::ResolvedBucketConfig;
@@ -610,7 +610,9 @@ impl SeaweedfsTestContainer {
     // Create MinioStorage instance (S3-compatible)
     let storage = MinioStorage::from_resolved_bucket(&config)
       .await
-      .map_err(|e| Box::<dyn std::error::Error>::from(format!("Failed to create MinioStorage: {:?}", e)))?;
+      .map_err(|e| {
+        Box::<dyn std::error::Error>::from(format!("Failed to create MinioStorage: {:?}", e))
+      })?;
 
     let max_retries = 10;
     let retry_delay = tokio::time::Duration::from_secs(1);
@@ -1578,10 +1580,7 @@ metrics_token = "test-metrics-token"
     let mut command = vec!["/garage", "-c", "/etc/garage.toml"];
     command.extend_from_slice(args);
 
-    let mut output = self
-      .container
-      .exec(ExecCommand::new(command))
-      .await?;
+    let mut output = self.container.exec(ExecCommand::new(command)).await?;
 
     let stdout_bytes = output.stdout_to_vec().await?;
     let stderr_bytes = output.stderr_to_vec().await?;
@@ -1605,11 +1604,13 @@ metrics_token = "test-metrics-token"
       } else {
         format!("{}\n{}", stdout.trim_end(), stderr.trim_end())
       };
-      return Err(format!(
-        "Garage command failed (exit code {:?}). Output:\n{}",
-        exit_code, combined
-      )
-      .into());
+      return Err(
+        format!(
+          "Garage command failed (exit code {:?}). Output:\n{}",
+          exit_code, combined
+        )
+        .into(),
+      );
     }
 
     if stderr.trim().is_empty() {
@@ -1642,7 +1643,11 @@ metrics_token = "test-metrics-token"
 
               let candidate = trimmed.split_whitespace().next()?;
               let is_hex = candidate.chars().all(|c| c.is_ascii_hexdigit());
-              if is_hex { Some(candidate) } else { None }
+              if is_hex {
+                Some(candidate)
+              } else {
+                None
+              }
             })
             .next();
 
@@ -1664,7 +1669,7 @@ metrics_token = "test-metrics-token"
                     continue;
                   }
                   return Err(e);
-                }
+                },
               }
             }
 
@@ -1672,12 +1677,12 @@ metrics_token = "test-metrics-token"
               return Ok(());
             }
           }
-        }
+        },
         Err(e) => {
           if attempt + 1 == max_retries {
             return Err(e);
           }
-        }
+        },
       }
 
       tokio::time::sleep(retry_delay).await;
@@ -1703,7 +1708,7 @@ metrics_token = "test-metrics-token"
             continue;
           }
           return Err(e);
-        }
+        },
       };
       let mut key_id = None;
       let mut secret_key = None;
@@ -1742,16 +1747,12 @@ metrics_token = "test-metrics-token"
       match self.exec_garage(&["bucket", "create", bucket_name]).await {
         Ok(_) => {
           break;
-        }
+        },
         Err(e) => {
           if attempt + 1 == max_retries {
-            return Err(format!(
-              "Failed to create Garage bucket. Last error: {}",
-              e
-            )
-            .into());
+            return Err(format!("Failed to create Garage bucket. Last error: {}", e).into());
           }
-        }
+        },
       }
 
       tokio::time::sleep(retry_delay).await;
@@ -1775,16 +1776,12 @@ metrics_token = "test-metrics-token"
       match result {
         Ok(_) => {
           break;
-        }
+        },
         Err(e) => {
           if attempt + 1 == allow_retries {
-            return Err(format!(
-              "Failed to allow Garage bucket access. Last error: {}",
-              e
-            )
-            .into());
+            return Err(format!("Failed to allow Garage bucket access. Last error: {}", e).into());
           }
-        }
+        },
       }
 
       tokio::time::sleep(retry_delay).await;

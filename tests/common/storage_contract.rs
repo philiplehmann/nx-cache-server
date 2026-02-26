@@ -23,8 +23,6 @@ where
     .await
     .expect("Failed to create storage");
 
-
-
   let test_hash = "test-hash-12345";
   let test_data = format!("Hello, {} integration test!", provider_name).into_bytes();
   let test_data_len = test_data.len() as u64;
@@ -221,8 +219,8 @@ pub async fn run_helper_operations_contract<
     test_object.to_string(),
     test_data.to_vec(),
   )
-    .await
-    .expect("Failed to put object");
+  .await
+  .expect("Failed to put object");
 
   let exists = object_exists(bucket_name.to_string(), test_object.to_string())
     .await
