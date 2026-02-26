@@ -6,14 +6,14 @@ use common::storage_contract::{
   run_retrieve_nonexistent_fails,
   run_store_and_retrieve,
 };
-use common::MinioTestContainer;
+use common::SeaweedfsTestContainer;
 
-/// Integration test that verifies MinioStorage works with MinIO
+/// Integration test that verifies MinioStorage works with SeaweedFS (S3-compatible)
 #[tokio::test(flavor = "multi_thread")]
-async fn test_minio_integration_store_and_retrieve() {
-  let container = MinioTestContainer::start().await;
+async fn test_seaweedfs_integration_store_and_retrieve() {
+  let container = SeaweedfsTestContainer::start().await;
 
-  run_store_and_retrieve("MinIO", |bucket_name| {
+  run_store_and_retrieve("SeaweedFS", |bucket_name| {
     let container = &container;
     async move { container.create_storage(bucket_name.as_str()).await }
   })
@@ -22,8 +22,8 @@ async fn test_minio_integration_store_and_retrieve() {
 
 /// Test that storing duplicate objects returns AlreadyExists error
 #[tokio::test(flavor = "multi_thread")]
-async fn test_minio_duplicate_store_fails() {
-  let container = MinioTestContainer::start().await;
+async fn test_seaweedfs_duplicate_store_fails() {
+  let container = SeaweedfsTestContainer::start().await;
 
   run_duplicate_store_fails(|bucket_name| {
     let container = &container;
@@ -34,8 +34,8 @@ async fn test_minio_duplicate_store_fails() {
 
 /// Test retrieving non-existent object returns NotFound error
 #[tokio::test(flavor = "multi_thread")]
-async fn test_minio_retrieve_nonexistent_fails() {
-  let container = MinioTestContainer::start().await;
+async fn test_seaweedfs_retrieve_nonexistent_fails() {
+  let container = SeaweedfsTestContainer::start().await;
 
   run_retrieve_nonexistent_fails(|bucket_name| {
     let container = &container;
@@ -46,8 +46,8 @@ async fn test_minio_retrieve_nonexistent_fails() {
 
 /// Test storing and retrieving large data (streaming)
 #[tokio::test(flavor = "multi_thread")]
-async fn test_minio_large_file_streaming() {
-  let container = MinioTestContainer::start().await;
+async fn test_seaweedfs_large_file_streaming() {
+  let container = SeaweedfsTestContainer::start().await;
 
   run_large_file_streaming(|bucket_name| {
     let container = &container;
@@ -56,10 +56,10 @@ async fn test_minio_large_file_streaming() {
   .await;
 }
 
-/// Test using helper methods to verify direct MinIO operations
+/// Test using helper methods to verify direct SeaweedFS operations
 #[tokio::test(flavor = "multi_thread")]
-async fn test_minio_helper_operations() {
-  let container = MinioTestContainer::start().await;
+async fn test_seaweedfs_helper_operations() {
+  let container = SeaweedfsTestContainer::start().await;
 
   run_helper_operations_contract(
     |bucket_name| {

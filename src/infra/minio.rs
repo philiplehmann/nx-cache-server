@@ -33,10 +33,16 @@ impl MinioStorage {
       })?
       .clone();
 
-    let base_url = BaseUrl::from_str(&endpoint).map_err(|e| {
+    let mut base_url = BaseUrl::from_str(&endpoint).map_err(|e| {
       tracing::error!("Invalid MinIO endpoint URL: {:?}", e);
       StorageError::OperationFailed
     })?;
+    if let Some(region) = &bucket_config.region {
+      base_url.region = region.clone();
+    }
+    if bucket_config.force_path_style {
+      base_url.virtual_style = false;
+    }
 
     let access_key = bucket_config.access_key_id.as_ref().ok_or_else(|| {
       tracing::error!("MinIO access key is required");
