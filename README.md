@@ -108,21 +108,21 @@ export CI_ACCESS_TOKEN=your-secret-token
 nx-cache-server --config config.yaml
 ```
 
-TOML works the same way. Create a `config.toml` file:
+TOML works the same way, using snake_case keys. Create a `config.toml` file:
 
 ```toml
 port = 3000
 
 [[buckets]]
 name = "production"
-bucketName = "my-nx-cache"
+bucket_name = "my-nx-cache"
 region = "us-west-2"
 
-[[serviceAccessTokens]]
+[[service_access_tokens]]
 name = "ci-pipeline"
 bucket = "production"
 prefix = "/ci"
-accessTokenEnv = "CI_ACCESS_TOKEN"
+access_token_env = "CI_ACCESS_TOKEN"
 ```
 
 ```bash

@@ -3,26 +3,26 @@ debug = false
 
 [[buckets]]
 name = "primary"
-bucketName = "my-nx-cache"
+bucket_name = "my-nx-cache"
 region = "us-west-2"
-forcePathStyle = false
+force_path_style = false
 timeout = 30
 
 [[buckets]]
 name = "secondary"
-bucketName = "my-nx-cache-secondary"
+bucket_name = "my-nx-cache-secondary"
 region = "us-west-2"
-forcePathStyle = false
+force_path_style = false
 timeout = 30
 
-[[serviceAccessTokens]]
+[[service_access_tokens]]
 name = "ci-pipeline"
 bucket = "primary"
 prefix = "/ci"
-accessTokenEnv = "CI_ACCESS_TOKEN"
+access_token_env = "CI_ACCESS_TOKEN"
 
-[[serviceAccessTokens]]
+[[service_access_tokens]]
 name = "dev-team"
 bucket = "secondary"
 prefix = "/dev"
-accessTokenEnv = "DEV_ACCESS_TOKEN"
+access_token_env = "DEV_ACCESS_TOKEN"

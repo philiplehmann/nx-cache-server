@@ -129,7 +129,10 @@ impl Config {
 
     let config: Config = match extension.as_deref() {
       Some("yaml") | Some("yml") => serde_yml::from_str(&content)?,
-      Some("toml") => toml::from_str(&content)?,
+      Some("toml") => {
+        let toml_config: TomlConfig = toml::from_str(&content)?;
+        toml_config.into()
+      },
       Some(other) => return Err(ConfigError::UnsupportedFormat(other.to_string())),
       None => {
         return Err(ConfigError::UnsupportedFormat(
@@ -345,6 +348,103 @@ impl Config {
     }
 
     normalized
+  }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TomlBucketConfig {
+  pub name: String,
+  pub bucket_name: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub access_key_id: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub access_key_id_env: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub secret_access_key: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub secret_access_key_env: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub session_token: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub session_token_env: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub region: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub endpoint_url: Option<String>,
+  #[serde(default)]
+  pub force_path_style: bool,
+  #[serde(default = "default_timeout")]
+  pub timeout: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TomlServiceAccessTokenConfig {
+  pub name: String,
+  pub bucket: String,
+  #[serde(default)]
+  pub prefix: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub access_token: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub access_token_env: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TomlConfig {
+  pub buckets: Vec<TomlBucketConfig>,
+  pub service_access_tokens: Vec<TomlServiceAccessTokenConfig>,
+  #[serde(default = "default_port")]
+  pub port: u16,
+  #[serde(default)]
+  pub debug: bool,
+}
+
+impl From<TomlBucketConfig> for BucketConfig {
+  fn from(value: TomlBucketConfig) -> Self {
+    Self {
+      name: value.name,
+      bucket_name: value.bucket_name,
+      access_key_id: value.access_key_id,
+      access_key_id_env: value.access_key_id_env,
+      secret_access_key: value.secret_access_key,
+      secret_access_key_env: value.secret_access_key_env,
+      session_token: value.session_token,
+      session_token_env: value.session_token_env,
+      region: value.region,
+      endpoint_url: value.endpoint_url,
+      force_path_style: value.force_path_style,
+      timeout: value.timeout,
+    }
+  }
+}
+
+impl From<TomlServiceAccessTokenConfig> for ServiceAccessTokenConfig {
+  fn from(value: TomlServiceAccessTokenConfig) -> Self {
+    Self {
+      name: value.name,
+      bucket: value.bucket,
+      prefix: value.prefix,
+      access_token: value.access_token,
+      access_token_env: value.access_token_env,
+    }
+  }
+}
+
+impl From<TomlConfig> for Config {
+  fn from(value: TomlConfig) -> Self {
+    Self {
+      buckets: value.buckets.into_iter().map(BucketConfig::from).collect(),
+      service_access_tokens: value
+        .service_access_tokens
+        .into_iter()
+        .map(ServiceAccessTokenConfig::from)
+        .collect(),
+      port: value.port,
+      debug: value.debug,
+    }
   }
 }
 
@@ -580,14 +680,14 @@ mod tests {
 
       [[buckets]]
       name = "bucket1"
-      bucketName = "my-bucket"
+      bucket_name = "my-bucket"
       region = "us-west-2"
 
-      [[serviceAccessTokens]]
+      [[service_access_tokens]]
       name = "test"
       bucket = "bucket1"
       prefix = "/ci"
-      accessToken = "token"
+      access_token = "token"
     "#;
 
     let temp_dir = std::env::temp_dir();
