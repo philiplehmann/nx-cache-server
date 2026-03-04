@@ -436,11 +436,11 @@ async fn test_request_with_invalid_hash_format() {
 
   let response = app.oneshot(request).await.unwrap();
 
-  // Should return 400 Bad Request for invalid hash format
+  // Should return 403 Access forbidden for invalid hash format
   assert_eq!(
     response.status(),
-    StatusCode::BAD_REQUEST,
-    "Invalid hash format should return 400"
+    StatusCode::FORBIDDEN,
+    "Invalid hash format should return 403"
   );
 
   let content_type = response
@@ -484,8 +484,8 @@ async fn test_all_error_responses_have_text_plain() {
         .unwrap(),
     ),
     (
-      "400 - Invalid hash",
-      StatusCode::BAD_REQUEST,
+      "404 - Invalid hash",
+      StatusCode::NOT_FOUND,
       Request::builder()
         .method("GET")
         .uri("/v1/cache/invalid@hash#special")

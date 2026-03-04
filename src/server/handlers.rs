@@ -12,7 +12,13 @@ pub async fn store_artifact(
   State(state): State<AppState>,
   request: Request,
 ) -> Result<impl IntoResponse, ServerError> {
-  validation::validate_hash(&hash)?;
+  if validation::validate_hash(&hash).is_err() {
+    return Ok((
+      StatusCode::FORBIDDEN,
+      [("Content-Type", "text/plain")],
+      "Access forbidden",
+    ));
+  }
 
   // Extract the authenticated token from request extensions BEFORE consuming the request
   let token = request
@@ -29,12 +35,23 @@ pub async fn store_artifact(
     .and_then(|s| s.parse::<u64>().ok());
 
   // Check if artifact already exists
-  if state.storage.exists_with_token(&token.0, &hash).await? {
-    return Ok((
-      StatusCode::CONFLICT,
-      [("Content-Type", "text/plain")],
-      "Cannot override an existing record",
-    ));
+  match state.storage.exists_with_token(&token.0, &hash).await {
+    Ok(true) => {
+      return Ok((
+        StatusCode::CONFLICT,
+        [("Content-Type", "text/plain")],
+        "Cannot override an existing record",
+      ));
+    },
+    Ok(false) => {},
+    Err(err) => {
+      tracing::error!("Storage error on exists: {}", err);
+      return Ok((
+        StatusCode::FORBIDDEN,
+        [("Content-Type", "text/plain")],
+        "Access forbidden",
+      ));
+    },
   }
 
   // convert body directly to AsyncRead without buffering
@@ -46,10 +63,26 @@ pub async fn store_artifact(
   let body_reader = tokio_util::io::StreamReader::new(io_stream);
   let reader_stream = tokio_util::io::ReaderStream::new(body_reader);
 
-  state
+  if let Err(err) = state
     .storage
     .store_with_token(&token.0, &hash, reader_stream, content_length)
-    .await?;
+    .await
+  {
+    if matches!(err, crate::domain::storage::StorageError::AlreadyExists) {
+      return Ok((
+        StatusCode::CONFLICT,
+        [("Content-Type", "text/plain")],
+        "Cannot override an existing record",
+      ));
+    }
+
+    tracing::error!("Storage error on store: {}", err);
+    return Ok((
+      StatusCode::FORBIDDEN,
+      [("Content-Type", "text/plain")],
+      "Access forbidden",
+    ));
+  }
 
   Ok((StatusCode::OK, [("Content-Type", "text/plain")], ""))
 }
