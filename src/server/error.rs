@@ -30,16 +30,14 @@ impl IntoResponse for ServerError {
       ServerError::Storage(StorageError::AlreadyExists) => {
         (StatusCode::CONFLICT, "Cannot override an existing record")
       },
+      ServerError::Storage(StorageError::OperationFailed) => {
+        (StatusCode::NOT_FOUND, "The record was not found")
+      },
 
       // HTTP-specific errors
-      ServerError::BadRequest => (StatusCode::BAD_REQUEST, "Bad request"),
+      ServerError::BadRequest => (StatusCode::NOT_FOUND, "The record was not found"),
       ServerError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized"),
-
-      // Generic fallback - log details but return safe message
-      _ => {
-        tracing::error!("Server error: {}", self);
-        (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
-      },
+      ServerError::InternalError => (StatusCode::NOT_FOUND, "The record was not found"),
     };
 
     (status, [("Content-Type", "text/plain")], message).into_response()

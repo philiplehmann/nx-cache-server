@@ -5,7 +5,9 @@ use minio::s3::http::BaseUrl;
 use minio::s3::types::S3Api;
 use minio::s3::Client;
 use std::str::FromStr;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncRead;
+use tokio::time::sleep;
 use tokio_util::io::{ReaderStream, StreamReader};
 
 use crate::domain::{
@@ -20,6 +22,36 @@ pub struct MinioStorage {
 }
 
 impl MinioStorage {
+  fn is_not_found_error(error_message: &str) -> bool {
+    error_message.contains("404")
+      || error_message.contains("Not Found")
+      || error_message.contains("NoSuchKey")
+  }
+
+  fn is_retryable_error(error_message: &str) -> bool {
+    let message = error_message.to_ascii_lowercase();
+    message.contains("incompletemessage")
+      || message.contains("timed out")
+      || message.contains("timeout")
+      || message.contains("connection reset")
+      || message.contains("connection closed")
+      || message.contains("broken pipe")
+      || message.contains("sendrequest")
+  }
+
+  fn retry_delay(attempt: usize) -> Duration {
+    let base_ms = match attempt {
+      1 => 100,
+      2 => 300,
+      _ => 900,
+    };
+    let jitter_ms = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .map(|duration| (duration.subsec_nanos() % 50) as u64)
+      .unwrap_or(0);
+    Duration::from_millis(base_ms + jitter_ms)
+  }
+
   /// Create MinioStorage from a resolved bucket configuration
   pub async fn from_resolved_bucket(
     bucket_config: &ResolvedBucketConfig,
@@ -82,8 +114,7 @@ impl StorageProvider for MinioStorage {
       Err(e) => {
         let err_msg = e.to_string();
         // MinIO returns 404 for non-existent objects
-        if err_msg.contains("404") || err_msg.contains("Not Found") || err_msg.contains("NoSuchKey")
-        {
+        if Self::is_not_found_error(&err_msg) {
           Ok(false)
         } else {
           tracing::error!("MinIO stat_object failed: {:?}", e);
@@ -119,29 +150,62 @@ impl StorageProvider for MinioStorage {
   }
 
   async fn retrieve(&self, hash: &str) -> Result<Box<dyn AsyncRead + Send + Unpin>, StorageError> {
-    let response = self
-      .client
-      .get_object(&self.bucket_name, hash)
-      .send()
-      .await
-      .map_err(|e| {
-        let err_msg = e.to_string();
-        if err_msg.contains("404") || err_msg.contains("Not Found") || err_msg.contains("NoSuchKey")
-        {
-          StorageError::NotFound
-        } else {
+    const MAX_ATTEMPTS: usize = 3;
+
+    for attempt in 1..=MAX_ATTEMPTS {
+      let response = match self.client.get_object(&self.bucket_name, hash).send().await {
+        Ok(response) => response,
+        Err(e) => {
+          let err_msg = e.to_string();
+          if Self::is_not_found_error(&err_msg) {
+            return Err(StorageError::NotFound);
+          }
+
+          if Self::is_retryable_error(&err_msg) && attempt < MAX_ATTEMPTS {
+            let delay = Self::retry_delay(attempt);
+            tracing::debug!(
+              "MinIO get_object transient error, retrying (attempt {}/{}, delay {:?}): {:?}",
+              attempt,
+              MAX_ATTEMPTS,
+              delay,
+              e
+            );
+            sleep(delay).await;
+            continue;
+          }
+
           tracing::error!("MinIO get_object failed: {:?}", e);
-          StorageError::OperationFailed
-        }
-      })?;
+          return Err(StorageError::OperationFailed);
+        },
+      };
 
-    let (stream, _size) = response.content.to_stream().await.map_err(|e| {
-      tracing::error!("Error streaming MinIO response content: {:?}", e);
-      StorageError::OperationFailed
-    })?;
+      let (stream, _size) = match response.content.to_stream().await {
+        Ok((stream, size)) => (stream, size),
+        Err(e) => {
+          let err_msg = e.to_string();
+          if Self::is_retryable_error(&err_msg) && attempt < MAX_ATTEMPTS {
+            let delay = Self::retry_delay(attempt);
+            tracing::debug!(
+              "MinIO stream transient error, retrying (attempt {}/{}, delay {:?}): {:?}",
+              attempt,
+              MAX_ATTEMPTS,
+              delay,
+              e
+            );
+            sleep(delay).await;
+            continue;
+          }
 
-    let reader = StreamReader::new(stream);
-    Ok(Box::new(reader))
+          tracing::error!("Error streaming MinIO response content: {:?}", e);
+          return Err(StorageError::OperationFailed);
+        },
+      };
+
+      let reader = StreamReader::new(stream);
+      return Ok(Box::new(reader));
+    }
+
+    Err(StorageError::OperationFailed)
   }
 }
 
