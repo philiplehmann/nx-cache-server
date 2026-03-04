@@ -1,4 +1,4 @@
-use crate::domain::yaml_config::ResolvedConfig;
+use crate::domain::config::ResolvedConfig;
 use crate::infra::multi_storage::MultiStorageRouter;
 use crate::server::app_state::AppState;
 use crate::server::router::create_router;

@@ -5,8 +5,8 @@ use tokio::io::AsyncRead;
 use tokio_util::io::ReaderStream;
 
 use crate::domain::{
+  config::{ResolvedConfig, ResolvedServiceAccessToken},
   storage::{StorageError, StorageProvider},
-  yaml_config::{ResolvedConfig, ResolvedServiceAccessToken},
 };
 use crate::infra::minio::MinioStorage;
 

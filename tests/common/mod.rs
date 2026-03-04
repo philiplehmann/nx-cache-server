@@ -20,8 +20,8 @@ use testcontainers_modules::minio::MinIO;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 
+use nx_cache_server::domain::config::ResolvedBucketConfig;
 use nx_cache_server::domain::storage::StorageProvider;
-use nx_cache_server::domain::yaml_config::ResolvedBucketConfig;
 use nx_cache_server::infra::minio::MinioStorage;
 
 /// MinIO test container wrapper with helper methods

@@ -4,11 +4,15 @@ use std::fs;
 use std::path::Path;
 
 #[derive(Debug, thiserror::Error)]
-pub enum YamlConfigError {
+pub enum ConfigError {
   #[error("Failed to read config file: {0}")]
   FileRead(#[from] std::io::Error),
   #[error("Failed to parse YAML: {0}")]
   YamlParse(#[from] serde_yml::Error),
+  #[error("Failed to parse TOML: {0}")]
+  TomlParse(#[from] toml::de::Error),
+  #[error("Unsupported config format: {0}")]
+  UnsupportedFormat(String),
   #[error("Configuration validation error: {0}")]
   Validation(String),
   #[error("Environment variable not found: {0}")]
@@ -93,7 +97,7 @@ pub struct ServiceAccessTokenConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct YamlConfig {
+pub struct Config {
   /// List of bucket configurations
   pub buckets: Vec<BucketConfig>,
 
@@ -113,20 +117,39 @@ fn default_port() -> u16 {
   3000
 }
 
-impl YamlConfig {
-  /// Load configuration from a YAML file
-  pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, YamlConfigError> {
+impl Config {
+  /// Load configuration from a YAML or TOML file
+  pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
+    let path = path.as_ref();
     let content = fs::read_to_string(path)?;
-    let config: YamlConfig = serde_yml::from_str(&content)?;
+    let extension = path
+      .extension()
+      .and_then(|ext| ext.to_str())
+      .map(|ext| ext.to_ascii_lowercase());
+
+    let config: Config = match extension.as_deref() {
+      Some("yaml") | Some("yml") => serde_yml::from_str(&content)?,
+      Some("toml") => {
+        let toml_config: TomlConfig = toml::from_str(&content)?;
+        toml_config.into()
+      },
+      Some(other) => return Err(ConfigError::UnsupportedFormat(other.to_string())),
+      None => {
+        return Err(ConfigError::UnsupportedFormat(
+          "missing file extension".to_string(),
+        ))
+      },
+    };
+
     config.validate()?;
     Ok(config)
   }
 
   /// Validate the configuration
-  pub fn validate(&self) -> Result<(), YamlConfigError> {
+  pub fn validate(&self) -> Result<(), ConfigError> {
     // Validate we have at least one bucket
     if self.buckets.is_empty() {
-      return Err(YamlConfigError::Validation(
+      return Err(ConfigError::Validation(
         "At least one bucket must be configured".to_string(),
       ));
     }
@@ -135,18 +158,18 @@ impl YamlConfig {
     let mut bucket_names = std::collections::HashSet::new();
     for bucket in &self.buckets {
       if bucket.name.is_empty() {
-        return Err(YamlConfigError::Validation(
+        return Err(ConfigError::Validation(
           "Bucket name cannot be empty".to_string(),
         ));
       }
       if bucket.bucket_name.is_empty() {
-        return Err(YamlConfigError::Validation(format!(
+        return Err(ConfigError::Validation(format!(
           "Bucket '{}' must have a bucketName",
           bucket.name
         )));
       }
       if !bucket_names.insert(&bucket.name) {
-        return Err(YamlConfigError::Validation(format!(
+        return Err(ConfigError::Validation(format!(
           "Duplicate bucket name: {}",
           bucket.name
         )));
@@ -155,7 +178,7 @@ impl YamlConfig {
 
     // Validate we have at least one service token
     if self.service_access_tokens.is_empty() {
-      return Err(YamlConfigError::Validation(
+      return Err(ConfigError::Validation(
         "At least one service access token must be configured".to_string(),
       ));
     }
@@ -164,12 +187,12 @@ impl YamlConfig {
     let mut token_names = std::collections::HashSet::new();
     for token in &self.service_access_tokens {
       if token.name.is_empty() {
-        return Err(YamlConfigError::Validation(
+        return Err(ConfigError::Validation(
           "Service token name cannot be empty".to_string(),
         ));
       }
       if !token_names.insert(&token.name) {
-        return Err(YamlConfigError::Validation(format!(
+        return Err(ConfigError::Validation(format!(
           "Duplicate service token name: {}",
           token.name
         )));
@@ -177,7 +200,7 @@ impl YamlConfig {
 
       // Validate bucket reference exists
       if !bucket_names.contains(&token.bucket) {
-        return Err(YamlConfigError::Validation(format!(
+        return Err(ConfigError::Validation(format!(
           "Service token '{}' references non-existent bucket '{}'",
           token.name, token.bucket
         )));
@@ -185,7 +208,7 @@ impl YamlConfig {
 
       // Validate token is provided via value or env var
       if token.access_token.is_none() && token.access_token_env.is_none() {
-        return Err(YamlConfigError::Validation(format!(
+        return Err(ConfigError::Validation(format!(
           "Service token '{}' must have either accessToken or accessTokenEnv",
           token.name
         )));
@@ -194,7 +217,7 @@ impl YamlConfig {
 
     // Validate port
     if self.port == 0 {
-      return Err(YamlConfigError::Validation(
+      return Err(ConfigError::Validation(
         "Port must be greater than 0".to_string(),
       ));
     }
@@ -203,7 +226,7 @@ impl YamlConfig {
   }
 
   /// Resolve all environment variables and return a resolved configuration
-  pub fn resolve_env_vars(&self) -> Result<ResolvedConfig, YamlConfigError> {
+  pub fn resolve_env_vars(&self) -> Result<ResolvedConfig, ConfigError> {
     let mut resolved_buckets = Vec::new();
 
     for bucket in &self.buckets {
@@ -219,13 +242,13 @@ impl YamlConfig {
       // Validate credential pairs
       match (&access_key_id, &secret_access_key) {
         (Some(_), None) => {
-          return Err(YamlConfigError::Validation(format!(
+          return Err(ConfigError::Validation(format!(
             "Bucket '{}': if accessKeyId is provided, secretAccessKey must also be provided",
             bucket.name
           )));
         },
         (None, Some(_)) => {
-          return Err(YamlConfigError::Validation(format!(
+          return Err(ConfigError::Validation(format!(
             "Bucket '{}': if secretAccessKey is provided, accessKeyId must also be provided",
             bucket.name
           )));
@@ -274,7 +297,7 @@ impl YamlConfig {
   fn resolve_optional_env(
     value: &Option<String>,
     env_var: &Option<String>,
-  ) -> Result<Option<String>, YamlConfigError> {
+  ) -> Result<Option<String>, ConfigError> {
     match (value, env_var) {
       (Some(v), _) => Ok(Some(v.clone())),
       (None, Some(env_name)) => match std::env::var(env_name) {
@@ -290,16 +313,16 @@ impl YamlConfig {
     value: &Option<String>,
     env_var: &Option<String>,
     field_name: &str,
-  ) -> Result<String, YamlConfigError> {
+  ) -> Result<String, ConfigError> {
     match (value, env_var) {
       (Some(v), _) => Ok(v.clone()),
       (None, Some(env_name)) => std::env::var(env_name).map_err(|_| {
-        YamlConfigError::EnvVarNotFound(format!(
+        ConfigError::EnvVarNotFound(format!(
           "{}: environment variable '{}' not found",
           field_name, env_name
         ))
       }),
-      (None, None) => Err(YamlConfigError::Validation(format!(
+      (None, None) => Err(ConfigError::Validation(format!(
         "{}: must be provided",
         field_name
       ))),
@@ -325,6 +348,103 @@ impl YamlConfig {
     }
 
     normalized
+  }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TomlBucketConfig {
+  pub name: String,
+  pub bucket_name: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub access_key_id: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub access_key_id_env: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub secret_access_key: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub secret_access_key_env: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub session_token: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub session_token_env: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub region: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub endpoint_url: Option<String>,
+  #[serde(default)]
+  pub force_path_style: bool,
+  #[serde(default = "default_timeout")]
+  pub timeout: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TomlServiceAccessTokenConfig {
+  pub name: String,
+  pub bucket: String,
+  #[serde(default)]
+  pub prefix: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub access_token: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub access_token_env: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TomlConfig {
+  pub buckets: Vec<TomlBucketConfig>,
+  pub service_access_tokens: Vec<TomlServiceAccessTokenConfig>,
+  #[serde(default = "default_port")]
+  pub port: u16,
+  #[serde(default)]
+  pub debug: bool,
+}
+
+impl From<TomlBucketConfig> for BucketConfig {
+  fn from(value: TomlBucketConfig) -> Self {
+    Self {
+      name: value.name,
+      bucket_name: value.bucket_name,
+      access_key_id: value.access_key_id,
+      access_key_id_env: value.access_key_id_env,
+      secret_access_key: value.secret_access_key,
+      secret_access_key_env: value.secret_access_key_env,
+      session_token: value.session_token,
+      session_token_env: value.session_token_env,
+      region: value.region,
+      endpoint_url: value.endpoint_url,
+      force_path_style: value.force_path_style,
+      timeout: value.timeout,
+    }
+  }
+}
+
+impl From<TomlServiceAccessTokenConfig> for ServiceAccessTokenConfig {
+  fn from(value: TomlServiceAccessTokenConfig) -> Self {
+    Self {
+      name: value.name,
+      bucket: value.bucket,
+      prefix: value.prefix,
+      access_token: value.access_token,
+      access_token_env: value.access_token_env,
+    }
+  }
+}
+
+impl From<TomlConfig> for Config {
+  fn from(value: TomlConfig) -> Self {
+    Self {
+      buckets: value.buckets.into_iter().map(BucketConfig::from).collect(),
+      service_access_tokens: value
+        .service_access_tokens
+        .into_iter()
+        .map(ServiceAccessTokenConfig::from)
+        .collect(),
+      port: value.port,
+      debug: value.debug,
+    }
   }
 }
 
@@ -388,22 +508,19 @@ mod tests {
 
   #[test]
   fn test_normalize_prefix() {
-    assert_eq!(YamlConfig::normalize_prefix(""), "");
-    assert_eq!(YamlConfig::normalize_prefix("/"), "/");
-    assert_eq!(YamlConfig::normalize_prefix("/ci"), "/ci");
-    assert_eq!(YamlConfig::normalize_prefix("ci"), "/ci");
-    assert_eq!(YamlConfig::normalize_prefix("/ci/"), "/ci");
-    assert_eq!(YamlConfig::normalize_prefix("ci/"), "/ci");
-    assert_eq!(
-      YamlConfig::normalize_prefix("/team1/subteam"),
-      "/team1/subteam"
-    );
-    assert_eq!(YamlConfig::normalize_prefix("  /ci  "), "/ci");
+    assert_eq!(Config::normalize_prefix(""), "");
+    assert_eq!(Config::normalize_prefix("/"), "/");
+    assert_eq!(Config::normalize_prefix("/ci"), "/ci");
+    assert_eq!(Config::normalize_prefix("ci"), "/ci");
+    assert_eq!(Config::normalize_prefix("/ci/"), "/ci");
+    assert_eq!(Config::normalize_prefix("ci/"), "/ci");
+    assert_eq!(Config::normalize_prefix("/team1/subteam"), "/team1/subteam");
+    assert_eq!(Config::normalize_prefix("  /ci  "), "/ci");
   }
 
   #[test]
   fn test_validation_empty_buckets() {
-    let config = YamlConfig {
+    let config = Config {
       buckets: vec![],
       service_access_tokens: vec![ServiceAccessTokenConfig {
         name: "test".to_string(),
@@ -421,7 +538,7 @@ mod tests {
 
   #[test]
   fn test_validation_empty_tokens() {
-    let config = YamlConfig {
+    let config = Config {
       buckets: vec![BucketConfig {
         name: "bucket1".to_string(),
         bucket_name: "my-bucket".to_string(),
@@ -446,7 +563,7 @@ mod tests {
 
   #[test]
   fn test_validation_duplicate_bucket_names() {
-    let config = YamlConfig {
+    let config = Config {
       buckets: vec![
         BucketConfig {
           name: "bucket1".to_string(),
@@ -493,7 +610,7 @@ mod tests {
 
   #[test]
   fn test_validation_nonexistent_bucket_reference() {
-    let config = YamlConfig {
+    let config = Config {
       buckets: vec![BucketConfig {
         name: "bucket1".to_string(),
         bucket_name: "my-bucket".to_string(),
@@ -524,7 +641,7 @@ mod tests {
 
   #[test]
   fn test_validation_success() {
-    let config = YamlConfig {
+    let config = Config {
       buckets: vec![BucketConfig {
         name: "bucket1".to_string(),
         bucket_name: "my-bucket".to_string(),
@@ -551,5 +668,79 @@ mod tests {
     };
 
     assert!(config.validate().is_ok());
+  }
+
+  #[test]
+  fn test_toml_parsing_success() {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let toml_content = r#"
+      port = 3000
+
+      [[buckets]]
+      name = "bucket1"
+      bucket_name = "my-bucket"
+      region = "us-west-2"
+
+      [[service_access_tokens]]
+      name = "test"
+      bucket = "bucket1"
+      prefix = "/ci"
+      access_token = "token"
+    "#;
+
+    let temp_dir = std::env::temp_dir();
+    let file_path: PathBuf = temp_dir.join("nx-cache-server-test-config.toml");
+    fs::write(&file_path, toml_content).expect("Failed to write temp config");
+
+    let config = Config::from_file(&file_path).expect("Failed to parse TOML config");
+    assert_eq!(config.port, 3000);
+    assert_eq!(config.buckets.len(), 1);
+    assert_eq!(config.service_access_tokens.len(), 1);
+
+    fs::remove_file(&file_path).expect("Failed to remove temp config");
+  }
+
+  #[test]
+  fn test_unsupported_extension_error() {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let content = "port: 3000";
+    let temp_dir = std::env::temp_dir();
+    let file_path: PathBuf = temp_dir.join("nx-cache-server-test-config.txt");
+    fs::write(&file_path, content).expect("Failed to write temp config");
+
+    let err = Config::from_file(&file_path).expect_err("Expected error");
+    assert!(matches!(err, ConfigError::UnsupportedFormat(_)));
+
+    fs::remove_file(&file_path).expect("Failed to remove temp config");
+  }
+
+  #[test]
+  fn test_load_example_yaml_config() {
+    use std::path::PathBuf;
+
+    let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+      .join("examples")
+      .join("config.example.yaml");
+
+    let config = Config::from_file(&file_path).expect("Failed to load YAML example");
+    assert!(!config.buckets.is_empty());
+    assert!(!config.service_access_tokens.is_empty());
+  }
+
+  #[test]
+  fn test_load_example_toml_config() {
+    use std::path::PathBuf;
+
+    let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+      .join("examples")
+      .join("config.example.toml");
+
+    let config = Config::from_file(&file_path).expect("Failed to load TOML example");
+    assert!(!config.buckets.is_empty());
+    assert!(!config.service_access_tokens.is_empty());
   }
 }

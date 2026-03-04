@@ -7,7 +7,7 @@ A lightweight, high-performance Nx cache server that bridges Nx CLI clients with
 ## Features
 
 - **AWS S3 Integration**: Direct streaming integration with AWS S3 and S3-compatible services
-- **Multiple Backends**: Support for multiple S3 buckets with flexible YAML configuration
+- **Multiple Backends**: Support for multiple S3 buckets with flexible YAML/TOML configuration
 - **Prefix-Based Isolation**: Logical isolation within buckets using prefixes (e.g., `/ci`, `/team1`)
 - **Multiple Service Tokens**: Independent tokens with different bucket and prefix assignments
 - **Memory Efficient**: Direct streaming with less than 4MB RAM usage during typical operation
@@ -75,7 +75,7 @@ docker run \
 
 ## Configuration
 
-### YAML Configuration
+### YAML or TOML Configuration
 
 **Features:**
 - ✅ Multiple S3 buckets as backends
@@ -108,9 +108,32 @@ export CI_ACCESS_TOKEN=your-secret-token
 nx-cache-server --config config.yaml
 ```
 
+TOML works the same way, using snake_case keys. Create a `config.toml` file:
+
+```toml
+port = 3000
+
+[[buckets]]
+name = "production"
+bucket_name = "my-nx-cache"
+region = "us-west-2"
+
+[[service_access_tokens]]
+name = "ci-pipeline"
+bucket = "production"
+prefix = "/ci"
+access_token_env = "CI_ACCESS_TOKEN"
+```
+
+```bash
+export CI_ACCESS_TOKEN=your-secret-token
+nx-cache-server --config config.toml
+```
+
 **📋 [Example Configurations](examples/)** - Ready-to-use configuration files:
 - [`config.minimal.yaml`](examples/config.minimal.yaml) - Simplest setup for quick start
 - [`config.example.yaml`](examples/config.example.yaml) - Comprehensive example with all options
+- [`config.example.toml`](examples/config.example.toml) - Comprehensive example with all options (TOML)
 - [`docker-compose.yaml`](examples/docker-compose.yaml) - Docker Compose example with all options
 - [`kustomize.yaml`](examples/kustomize.yaml) - Kubernetes example with all options
 
