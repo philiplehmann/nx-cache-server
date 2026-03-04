@@ -1,0 +1,28 @@
+port = 3000
+debug = false
+
+[[buckets]]
+name = "primary"
+bucketName = "my-nx-cache"
+region = "us-west-2"
+forcePathStyle = false
+timeout = 30
+
+[[buckets]]
+name = "secondary"
+bucketName = "my-nx-cache-secondary"
+region = "us-west-2"
+forcePathStyle = false
+timeout = 30
+
+[[serviceAccessTokens]]
+name = "ci-pipeline"
+bucket = "primary"
+prefix = "/ci"
+accessTokenEnv = "CI_ACCESS_TOKEN"
+
+[[serviceAccessTokens]]
+name = "dev-team"
+bucket = "secondary"
+prefix = "/dev"
+accessTokenEnv = "DEV_ACCESS_TOKEN"

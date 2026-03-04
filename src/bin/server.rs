@@ -1,18 +1,18 @@
 use clap::Parser;
-use nx_cache_server::domain::yaml_config::YamlConfig;
+use nx_cache_server::domain::config::Config;
 use nx_cache_server::infra::multi_storage::MultiStorageRouter;
 use nx_cache_server::server::run_server;
 use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "nx-cache-server")]
-#[command(about = "Nx Remote Cache Server - S3 Backend with YAML Configuration")]
+#[command(about = "Nx Remote Cache Server - S3 Backend with YAML/TOML Configuration")]
 struct Cli {
   #[arg(
     short = 'c',
     long = "config",
     env = "CONFIG_FILE",
-    help = "Path to YAML configuration file"
+    help = "Path to YAML or TOML configuration file"
   )]
   config_file: PathBuf,
 
@@ -35,8 +35,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   tracing::info!("Loading configuration from: {}", cli.config_file.display());
 
-  // Load and parse YAML configuration
-  let yaml_config = match YamlConfig::from_file(&cli.config_file) {
+  // Load and parse configuration
+  let config = match Config::from_file(&cli.config_file) {
     Ok(config) => config,
     Err(e) => {
       eprintln!();
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   };
 
   // Resolve environment variables
-  let resolved_config = match yaml_config.resolve_env_vars() {
+  let resolved_config = match config.resolve_env_vars() {
     Ok(config) => config,
     Err(e) => {
       eprintln!();

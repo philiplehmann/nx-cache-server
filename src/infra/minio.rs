@@ -11,8 +11,8 @@ use tokio::time::sleep;
 use tokio_util::io::{ReaderStream, StreamReader};
 
 use crate::domain::{
+  config::ResolvedBucketConfig,
   storage::{StorageError, StorageProvider},
-  yaml_config::ResolvedBucketConfig,
 };
 
 #[derive(Clone)]

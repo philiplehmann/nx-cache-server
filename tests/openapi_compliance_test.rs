@@ -17,7 +17,7 @@ use axum::{
   Router,
 };
 use common::{unique_bucket_name, MinioTestContainer};
-use nx_cache_server::domain::yaml_config::{
+use nx_cache_server::domain::config::{
   ResolvedBucketConfig, ResolvedConfig, ResolvedServiceAccessToken,
 };
 use nx_cache_server::infra::multi_storage::MultiStorageRouter;

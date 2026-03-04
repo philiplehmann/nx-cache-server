@@ -25,10 +25,10 @@ use tokio::io::AsyncReadExt;
 use tokio_util::io::ReaderStream;
 
 use common::{unique_bucket_name, MinioTestContainer};
-use nx_cache_server::domain::storage::StorageProvider;
-use nx_cache_server::domain::yaml_config::{
+use nx_cache_server::domain::config::{
   ResolvedBucketConfig, ResolvedConfig, ResolvedServiceAccessToken,
 };
+use nx_cache_server::domain::storage::StorageProvider;
 use nx_cache_server::infra::multi_storage::MultiStorageRouter;
 
 #[tokio::test(flavor = "multi_thread")]
