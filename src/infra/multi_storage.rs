@@ -8,14 +8,14 @@ use crate::domain::{
   config::{ResolvedConfig, ResolvedServiceAccessToken},
   storage::{StorageError, StorageProvider},
 };
-use crate::infra::minio::MinioStorage;
+use crate::infra::minio::NxCacheStorage;
 
 /// Storage router that manages multiple S3 buckets and routes requests
 /// based on access tokens and their associated prefixes
 #[derive(Clone)]
 pub struct MultiStorageRouter {
   /// Map of bucket name to storage instance
-  storages: Arc<HashMap<String, Arc<MinioStorage>>>,
+  storages: Arc<HashMap<String, Arc<NxCacheStorage>>>,
   /// Map of access token to service configuration
   token_map: Arc<HashMap<String, ResolvedServiceAccessToken>>,
 }
@@ -27,7 +27,7 @@ impl MultiStorageRouter {
 
     // Initialize storage for each bucket
     for bucket_config in &config.buckets {
-      let storage = MinioStorage::from_resolved_bucket(bucket_config).await?;
+      let storage = NxCacheStorage::from_resolved_bucket(bucket_config).await?;
       storages.insert(bucket_config.name.clone(), Arc::new(storage));
     }
 
@@ -54,7 +54,7 @@ impl MultiStorageRouter {
   }
 
   /// Get storage and prefix for a given access token
-  fn resolve_storage(&self, token: &str) -> Result<(Arc<MinioStorage>, String), StorageError> {
+  fn resolve_storage(&self, token: &str) -> Result<(Arc<NxCacheStorage>, String), StorageError> {
     let service_config = self
       .token_map
       .get(token)
