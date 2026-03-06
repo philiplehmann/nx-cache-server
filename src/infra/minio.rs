@@ -1,27 +1,33 @@
 use async_trait::async_trait;
+use futures_util::StreamExt;
 use minio::s3::builders::ObjectContent;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
-use minio::s3::types::S3Api;
+use minio::s3::sse::{Sse, SseCustomerKey, SseKms, SseS3};
+use minio::s3::types::{S3Api, ToStream};
 use minio::s3::Client;
+use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncRead;
 use tokio::time::sleep;
 use tokio_util::io::{ReaderStream, StreamReader};
 
 use crate::domain::{
-  config::ResolvedBucketConfig,
+  config::{ResolvedBucketConfig, ResolvedSseConfig},
   storage::{StorageError, StorageProvider},
 };
 
 #[derive(Clone)]
-pub struct MinioStorage {
+pub struct NxCacheStorage {
   client: Client,
   bucket_name: String,
+  sse: Option<Arc<dyn Sse>>,
+  sse_customer_key: Option<SseCustomerKey>,
 }
 
-impl MinioStorage {
+impl NxCacheStorage {
   fn is_not_found_error(error_message: &str) -> bool {
     error_message.contains("404")
       || error_message.contains("Not Found")
@@ -52,7 +58,7 @@ impl MinioStorage {
     Duration::from_millis(base_ms + jitter_ms)
   }
 
-  /// Create MinioStorage from a resolved bucket configuration
+  /// Create NxCacheStorage from a resolved bucket configuration
   pub async fn from_resolved_bucket(
     bucket_config: &ResolvedBucketConfig,
   ) -> Result<Self, StorageError> {
@@ -88,25 +94,63 @@ impl MinioStorage {
 
     let static_provider = StaticProvider::new(access_key, secret_key, None);
 
-    let client =
-      Client::new(base_url, Some(Box::new(static_provider)), None, None).map_err(|e| {
-        tracing::error!("Failed to create MinIO client: {:?}", e);
-        StorageError::OperationFailed
-      })?;
+    let (sse, sse_customer_key) = match &bucket_config.sse {
+      None => (None, None),
+      Some(ResolvedSseConfig::SseS3) => (Some(Arc::new(SseS3::new()) as Arc<dyn Sse>), None),
+      Some(ResolvedSseConfig::SseKms { key_id, context }) => {
+        let sse = SseKms::new(key_id, context.as_deref());
+        (Some(Arc::new(sse) as Arc<dyn Sse>), None)
+      },
+      Some(ResolvedSseConfig::SseC { key }) => {
+        let ssec = SseCustomerKey::new(key);
+        let sse: Arc<dyn Sse> = Arc::new(ssec.clone());
+        (Some(sse), Some(ssec))
+      },
+    };
+
+    let ssl_cert_file = std::env::var("SSL_CERT_FILE")
+      .ok()
+      .map(|value| value.trim().to_string())
+      .filter(|value| !value.is_empty())
+      .map(PathBuf::from)
+      .filter(|path| path.is_file());
+
+    let ignore_cert_check = std::env::var("NX_CACHE_SERVER_INSECURE_TLS")
+      .ok()
+      .map(|value| value.trim().to_ascii_lowercase())
+      .and_then(|value| match value.as_str() {
+        "1" | "true" | "yes" | "y" => Some(true),
+        "0" | "false" | "no" | "n" => Some(false),
+        _ => None,
+      });
+
+    let client = Client::new(
+      base_url,
+      Some(Box::new(static_provider)),
+      ssl_cert_file.as_deref(),
+      ignore_cert_check,
+    )
+    .map_err(|e| {
+      tracing::error!("Failed to create MinIO client: {:?}", e);
+      StorageError::OperationFailed
+    })?;
 
     Ok(Self {
       client,
       bucket_name: bucket_config.bucket_name.clone(),
+      sse,
+      sse_customer_key,
     })
   }
 }
 
 #[async_trait]
-impl StorageProvider for MinioStorage {
+impl StorageProvider for NxCacheStorage {
   async fn exists(&self, hash: &str) -> Result<bool, StorageError> {
     match self
       .client
       .stat_object(&self.bucket_name, hash)
+      .ssec(self.sse_customer_key.clone())
       .send()
       .await
     {
@@ -115,6 +159,31 @@ impl StorageProvider for MinioStorage {
         let err_msg = e.to_string();
         // MinIO returns 404 for non-existent objects
         if Self::is_not_found_error(&err_msg) {
+          Ok(false)
+        } else if self.sse_customer_key.is_some() {
+          tracing::debug!(
+            "MinIO stat_object failed with SSE-C, falling back to list_objects: {:?}",
+            e
+          );
+
+          let mut stream = self
+            .client
+            .list_objects(&self.bucket_name)
+            .recursive(true)
+            .to_stream()
+            .await;
+
+          while let Some(result) = stream.next().await {
+            let response = result.map_err(|e| {
+              tracing::error!("MinIO list_objects failed: {:?}", e);
+              StorageError::OperationFailed
+            })?;
+
+            if response.contents.iter().any(|item| item.name == hash) {
+              return Ok(true);
+            }
+          }
+
           Ok(false)
         } else {
           tracing::error!("MinIO stat_object failed: {:?}", e);
@@ -135,14 +204,21 @@ impl StorageProvider for MinioStorage {
     }
 
     let content = ObjectContent::new_from_stream(data, content_length);
+    let sse_enabled = self.sse.is_some();
+    let sse_customer_key_enabled = self.sse_customer_key.is_some();
 
     self
       .client
       .put_object_content(&self.bucket_name, hash, content)
+      .sse(self.sse.clone())
       .send()
       .await
       .map_err(|e| {
         tracing::error!("MinIO put_object_content failed: {:?}", e);
+        eprintln!(
+          "MinIO put_object_content failed (sse_enabled={}, sse_customer_key_enabled={}): {:?}",
+          sse_enabled, sse_customer_key_enabled, e
+        );
         StorageError::OperationFailed
       })?;
 
@@ -153,7 +229,13 @@ impl StorageProvider for MinioStorage {
     const MAX_ATTEMPTS: usize = 3;
 
     for attempt in 1..=MAX_ATTEMPTS {
-      let response = match self.client.get_object(&self.bucket_name, hash).send().await {
+      let response = match self
+        .client
+        .get_object(&self.bucket_name, hash)
+        .ssec(self.sse_customer_key.clone())
+        .send()
+        .await
+      {
         Ok(response) => response,
         Err(e) => {
           let err_msg = e.to_string();
@@ -209,7 +291,7 @@ impl StorageProvider for MinioStorage {
   }
 }
 
-impl MinioStorage {
+impl NxCacheStorage {
   /// Test bucket connectivity by checking if bucket exists
   /// This verifies that credentials are valid and the bucket is accessible
   pub async fn test_connection(&self) -> Result<(), StorageError> {

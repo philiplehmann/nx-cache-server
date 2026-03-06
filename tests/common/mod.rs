@@ -9,35 +9,175 @@ use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::S3Api;
 use minio::s3::Client;
+use serde::Deserialize;
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair, SanType};
+use tempfile::TempDir;
+
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{core::ContainerPort, core::ExecCommand, core::Mount, GenericImage, ImageExt};
-use testcontainers_modules::minio::MinIO;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 
 use nx_cache_server::domain::config::ResolvedBucketConfig;
 use nx_cache_server::domain::storage::StorageProvider;
-use nx_cache_server::infra::minio::MinioStorage;
+use nx_cache_server::infra::minio::NxCacheStorage;
+
+#[derive(Debug, Deserialize)]
+struct TestcontainersConfig {
+  images: TestcontainersImages,
+}
+
+#[derive(Debug, Deserialize)]
+struct TestcontainersImages {
+  minio: ImageConfig,
+  garage: ImageConfig,
+  seaweedfs: ImageConfig,
+  rustfs: ImageConfig,
+}
+
+#[derive(Debug, Deserialize)]
+struct ImageConfig {
+  repository: String,
+  tag: String,
+}
+
+static TESTCONTAINERS_CONFIG: OnceLock<TestcontainersConfig> = OnceLock::new();
+
+fn load_testcontainers_config() -> &'static TestcontainersConfig {
+  TESTCONTAINERS_CONFIG.get_or_init(|| {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testcontainers.toml");
+    let content = fs::read_to_string(&path)
+      .unwrap_or_else(|e| panic!("Failed to read testcontainers.toml: {}", e));
+    let config: TestcontainersConfig = toml::from_str(&content).unwrap_or_else(|e| {
+      panic!("Failed to parse testcontainers.toml: {}", e);
+    });
+    validate_image_config(&config.images.minio, "minio");
+    validate_image_config(&config.images.garage, "garage");
+    validate_image_config(&config.images.seaweedfs, "seaweedfs");
+    validate_image_config(&config.images.rustfs, "rustfs");
+    config
+  })
+}
+
+fn validate_image_config(image: &ImageConfig, name: &str) {
+  if image.tag.trim().is_empty() || image.tag == "REPLACE_ME" {
+    panic!(
+      "testcontainers.toml image tag for '{}' must be set to a concrete version",
+      name
+    );
+  }
+  if image.repository.trim().is_empty() {
+    panic!(
+      "testcontainers.toml image repository for '{}' must be set",
+      name
+    );
+  }
+}
+
+fn minio_tls_options() -> (Option<PathBuf>, Option<bool>) {
+  let ssl_cert_file = std::env::var("SSL_CERT_FILE")
+    .ok()
+    .filter(|value| !value.trim().is_empty())
+    .map(PathBuf::from)
+    .filter(|path| path.exists());
+
+  let ignore_cert_check = std::env::var("NX_CACHE_SERVER_INSECURE_TLS")
+    .ok()
+    .map(|value| value.to_ascii_lowercase())
+    .and_then(|value| match value.as_str() {
+      "1" | "true" | "yes" | "y" => Some(true),
+      "0" | "false" | "no" | "n" => Some(false),
+      _ => None,
+    });
+
+  (ssl_cert_file, ignore_cert_check)
+}
+
+fn create_minio_tls_certs() -> Result<TempDir, Box<dyn std::error::Error>> {
+  let mut params = CertificateParams::new(vec!["localhost".to_string()])?;
+  params
+    .subject_alt_names
+    .push(SanType::IpAddress("127.0.0.1".parse()?));
+  params.distinguished_name = DistinguishedName::new();
+  params
+    .distinguished_name
+    .push(DnType::CommonName, "localhost");
+
+  let key_pair = KeyPair::generate()?;
+  let cert = params.self_signed(&key_pair)?;
+
+  let dir = tempfile::Builder::new().prefix("minio-tls-").tempdir()?;
+
+  fs::write(dir.path().join("public.crt"), cert.pem())?;
+  fs::write(dir.path().join("private.key"), key_pair.serialize_pem())?;
+
+  Ok(dir)
+}
+
+fn create_rustfs_tls_certs() -> Result<TempDir, Box<dyn std::error::Error>> {
+  let mut params = CertificateParams::new(vec!["localhost".to_string()])?;
+  params
+    .subject_alt_names
+    .push(SanType::IpAddress("127.0.0.1".parse()?));
+  params.distinguished_name = DistinguishedName::new();
+  params
+    .distinguished_name
+    .push(DnType::CommonName, "localhost");
+
+  let key_pair = KeyPair::generate()?;
+  let cert = params.self_signed(&key_pair)?;
+
+  let dir = tempfile::Builder::new().prefix("rustfs-tls-").tempdir()?;
+
+  fs::write(dir.path().join("rustfs_cert.pem"), cert.pem())?;
+  fs::write(dir.path().join("rustfs_key.pem"), key_pair.serialize_pem())?;
+
+  #[cfg(unix)]
+  {
+    use std::fs::Permissions;
+    fs::set_permissions(
+      dir.path().join("rustfs_cert.pem"),
+      Permissions::from_mode(0o644),
+    )?;
+    fs::set_permissions(
+      dir.path().join("rustfs_key.pem"),
+      Permissions::from_mode(0o644),
+    )?;
+  }
+
+  Ok(dir)
+}
 
 /// MinIO test container wrapper with helper methods
 #[allow(dead_code)]
 pub struct MinioTestContainer {
-  pub container: testcontainers::ContainerAsync<MinIO>,
+  pub container: testcontainers::ContainerAsync<GenericImage>,
   pub host_port: u16,
   pub access_key: String,
   pub secret_key: String,
+  pub use_https: bool,
+  _tls_dir: Option<TempDir>,
 }
 
 impl MinioTestContainer {
   /// Start a new MinIO container with default credentials
   #[allow(dead_code)]
   pub async fn start() -> Self {
-    let minio_image = MinIO::default();
+    let config = load_testcontainers_config();
+    let image = &config.images.minio;
+
+    let minio_image = GenericImage::new(image.repository.as_str(), image.tag.as_str())
+      .with_exposed_port(ContainerPort::Tcp(9000))
+      .with_env_var("MINIO_ROOT_USER", "minioadmin")
+      .with_env_var("MINIO_ROOT_PASSWORD", "minioadmin")
+      .with_cmd(["server", "/data", "--console-address", ":9001"]);
     let container = minio_image
       .start()
       .await
@@ -52,12 +192,87 @@ impl MinioTestContainer {
       host_port,
       access_key: "minioadmin".to_string(),
       secret_key: "minioadmin".to_string(),
+      use_https: false,
+      _tls_dir: None,
+    }
+  }
+
+  /// Start a new MinIO container with SSE settings enabled
+  #[allow(dead_code)]
+  pub async fn start_with_sse() -> Self {
+    let config = load_testcontainers_config();
+    let image = &config.images.minio;
+
+    let tls_dir = create_minio_tls_certs().expect("Failed to create MinIO TLS certs");
+    std::env::set_var("NX_CACHE_SERVER_INSECURE_TLS", "1");
+    std::env::set_var(
+      "SSL_CERT_FILE",
+      tls_dir
+        .path()
+        .join("public.crt")
+        .to_string_lossy()
+        .to_string(),
+    );
+
+    let minio_image = GenericImage::new(image.repository.as_str(), image.tag.as_str())
+      .with_exposed_port(ContainerPort::Tcp(9000))
+      .with_env_var("MINIO_ROOT_USER", "minioadmin")
+      .with_env_var("MINIO_ROOT_PASSWORD", "minioadmin")
+      .with_env_var(
+        "MINIO_KMS_SECRET_KEY",
+        "test-kms-key:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+      )
+      .with_env_var("MINIO_API_ALLOW_NON_TLS_SSE_C", "on")
+      .with_mount(Mount::bind_mount(
+        tls_dir.path().to_string_lossy().to_string(),
+        "/root/.minio/certs",
+      ))
+      .with_cmd([
+        "server",
+        "/data",
+        "--console-address",
+        ":9001",
+        "--certs-dir",
+        "/root/.minio/certs",
+      ]);
+    let container = minio_image
+      .start()
+      .await
+      .expect("Failed to start MinIO container");
+    let host_port = container
+      .get_host_port_ipv4(9000)
+      .await
+      .expect("Failed to get MinIO port");
+
+    let readiness_retries = 30;
+    let readiness_delay = tokio::time::Duration::from_millis(500);
+    for attempt in 0..readiness_retries {
+      if TcpStream::connect(format!("127.0.0.1:{}", host_port))
+        .await
+        .is_ok()
+      {
+        break;
+      }
+      if attempt + 1 == readiness_retries {
+        panic!("MinIO SSE endpoint not ready");
+      }
+      tokio::time::sleep(readiness_delay).await;
+    }
+
+    Self {
+      container,
+      host_port,
+      access_key: "minioadmin".to_string(),
+      secret_key: "minioadmin".to_string(),
+      use_https: true,
+      _tls_dir: Some(tls_dir),
     }
   }
 
   /// Get the endpoint URL for this MinIO instance
   pub fn endpoint_url(&self) -> String {
-    format!("http://localhost:{}", self.host_port)
+    let scheme = if self.use_https { "https" } else { "http" };
+    format!("{}://localhost:{}", scheme, self.host_port)
   }
 
   /// Create a storage config for this MinIO instance
@@ -72,6 +287,7 @@ impl MinioTestContainer {
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
       force_path_style: true,
+      sse: None,
       timeout: 30,
     }
   }
@@ -80,7 +296,13 @@ impl MinioTestContainer {
   pub async fn create_minio_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
     let base_url = self.endpoint_url().parse::<BaseUrl>()?;
     let static_provider = StaticProvider::new(&self.access_key, &self.secret_key, None);
-    let client = Client::new(base_url, Some(Box::new(static_provider)), None, None)?;
+    let (ssl_cert_file, ignore_cert_check) = minio_tls_options();
+    let client = Client::new(
+      base_url,
+      Some(Box::new(static_provider)),
+      ssl_cert_file.as_deref(),
+      ignore_cert_check,
+    )?;
     Ok(client)
   }
 
@@ -88,22 +310,46 @@ impl MinioTestContainer {
   pub async fn create_bucket(&self, bucket_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let client = self.create_minio_client().await?;
 
-    // Check if bucket exists first
-    let exists = client.bucket_exists(bucket_name).send().await?.exists;
+    let max_retries = 10;
+    let retry_delay = tokio::time::Duration::from_millis(300);
 
-    if !exists {
-      client.create_bucket(bucket_name).send().await?;
+    for attempt in 0..max_retries {
+      // Check if bucket exists first
+      let exists = match client.bucket_exists(bucket_name).send().await {
+        Ok(response) => response.exists,
+        Err(e) => {
+          if attempt + 1 == max_retries {
+            return Err(Box::new(e));
+          }
+          tokio::time::sleep(retry_delay).await;
+          continue;
+        },
+      };
+
+      if exists {
+        return Ok(());
+      }
+
+      match client.create_bucket(bucket_name).send().await {
+        Ok(_) => return Ok(()),
+        Err(e) => {
+          if attempt + 1 == max_retries {
+            return Err(Box::new(e));
+          }
+          tokio::time::sleep(retry_delay).await;
+        },
+      }
     }
 
     Ok(())
   }
 
-  /// Create a bucket and return a configured MinioStorage instance
+  /// Create a bucket and return a configured NxCacheStorage instance
   #[allow(dead_code)]
   pub async fn create_storage(
     &self,
     bucket_name: &str,
-  ) -> Result<MinioStorage, Box<dyn std::error::Error>> {
+  ) -> Result<NxCacheStorage, Box<dyn std::error::Error>> {
     // Wait a bit for MinIO to be fully ready
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
@@ -113,10 +359,10 @@ impl MinioTestContainer {
     // Create storage config
     let config = self.create_storage_config(bucket_name.to_string());
 
-    // Create MinioStorage instance
-    MinioStorage::from_resolved_bucket(&config)
+    // Create NxCacheStorage instance
+    NxCacheStorage::from_resolved_bucket(&config)
       .await
-      .map_err(|e| format!("Failed to create MinioStorage: {:?}", e).into())
+      .map_err(|e| format!("Failed to create NxCacheStorage: {:?}", e).into())
   }
 
   /// List objects in a bucket using MinIO client
@@ -227,6 +473,8 @@ pub struct RustfsTestContainer {
   pub host_port: u16,
   pub access_key: String,
   pub secret_key: String,
+  pub use_https: bool,
+  _tls_dir: Option<TempDir>,
 }
 
 impl RustfsTestContainer {
@@ -236,10 +484,29 @@ impl RustfsTestContainer {
     let access_key = "rustfsadmin".to_string();
     let secret_key = "rustfsadmin".to_string();
 
-    let rustfs_image = GenericImage::new("rustfs/rustfs", "1.0.0-alpha.83")
+    let tls_dir = create_rustfs_tls_certs().expect("Failed to create RustFS TLS certs");
+    std::env::set_var("NX_CACHE_SERVER_INSECURE_TLS", "1");
+    std::env::set_var(
+      "SSL_CERT_FILE",
+      tls_dir
+        .path()
+        .join("rustfs_cert.pem")
+        .to_string_lossy()
+        .to_string(),
+    );
+
+    let config = load_testcontainers_config();
+    let image = &config.images.rustfs;
+
+    let rustfs_image = GenericImage::new(image.repository.as_str(), image.tag.as_str())
       .with_exposed_port(ContainerPort::Tcp(9000))
       .with_env_var("RUSTFS_ACCESS_KEY", access_key.clone())
-      .with_env_var("RUSTFS_SECRET_KEY", secret_key.clone());
+      .with_env_var("RUSTFS_SECRET_KEY", secret_key.clone())
+      .with_env_var("RUSTFS_TLS_PATH", "/opt/tls")
+      .with_mount(Mount::bind_mount(
+        tls_dir.path().to_string_lossy().to_string(),
+        "/opt/tls",
+      ));
     let container = rustfs_image
       .start()
       .await
@@ -254,12 +521,15 @@ impl RustfsTestContainer {
       host_port,
       access_key,
       secret_key,
+      use_https: true,
+      _tls_dir: Some(tls_dir),
     }
   }
 
   /// Get the endpoint URL for this RustFS instance
   pub fn endpoint_url(&self) -> String {
-    format!("http://localhost:{}", self.host_port)
+    let scheme = if self.use_https { "https" } else { "http" };
+    format!("{}://localhost:{}", scheme, self.host_port)
   }
 
   /// Create a storage config for this RustFS instance
@@ -274,6 +544,7 @@ impl RustfsTestContainer {
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
       force_path_style: true,
+      sse: None,
       timeout: 30,
     }
   }
@@ -282,7 +553,13 @@ impl RustfsTestContainer {
   pub async fn create_rustfs_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
     let base_url = self.endpoint_url().parse::<BaseUrl>()?;
     let static_provider = StaticProvider::new(&self.access_key, &self.secret_key, None);
-    let client = Client::new(base_url, Some(Box::new(static_provider)), None, None)?;
+    let (ssl_cert_file, ignore_cert_check) = minio_tls_options();
+    let client = Client::new(
+      base_url,
+      Some(Box::new(static_provider)),
+      ssl_cert_file.as_deref(),
+      ignore_cert_check,
+    )?;
     Ok(client)
   }
 
@@ -324,12 +601,12 @@ impl RustfsTestContainer {
     Ok(())
   }
 
-  /// Create a bucket and return a configured MinioStorage instance
+  /// Create a bucket and return a configured NxCacheStorage instance
   #[allow(dead_code)]
   pub async fn create_storage(
     &self,
     bucket_name: &str,
-  ) -> Result<MinioStorage, Box<dyn std::error::Error>> {
+  ) -> Result<NxCacheStorage, Box<dyn std::error::Error>> {
     // Wait a bit for RustFS to be fully ready
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
@@ -339,10 +616,10 @@ impl RustfsTestContainer {
     // Create storage config
     let config = self.create_storage_config(bucket_name.to_string());
 
-    // Create MinioStorage instance (S3-compatible)
-    MinioStorage::from_resolved_bucket(&config)
+    // Create NxCacheStorage instance (S3-compatible)
+    NxCacheStorage::from_resolved_bucket(&config)
       .await
-      .map_err(|e| format!("Failed to create MinioStorage: {:?}", e).into())
+      .map_err(|e| format!("Failed to create NxCacheStorage: {:?}", e).into())
   }
 
   /// List objects in a bucket using RustFS client
@@ -455,6 +732,8 @@ pub struct SeaweedfsTestContainer {
   pub host_port: u16,
   pub access_key: String,
   pub secret_key: String,
+  pub use_https: bool,
+  _tls_dir: Option<TempDir>,
   _seaweedfs_lock: tokio::sync::OwnedMutexGuard<()>,
 }
 
@@ -471,17 +750,41 @@ impl SeaweedfsTestContainer {
     let access_key = "admin".to_string();
     let secret_key = "key".to_string();
 
+    let tls_dir = create_minio_tls_certs().expect("Failed to create SeaweedFS TLS certs");
+    std::env::set_var("NX_CACHE_SERVER_INSECURE_TLS", "1");
+    std::env::set_var(
+      "SSL_CERT_FILE",
+      tls_dir
+        .path()
+        .join("public.crt")
+        .to_string_lossy()
+        .to_string(),
+    );
+
     let host_port = std::net::TcpListener::bind("127.0.0.1:0")
       .expect("Failed to bind random host port for SeaweedFS")
       .local_addr()
       .expect("Failed to read bound port for SeaweedFS")
       .port();
 
-    let seaweedfs_image = GenericImage::new("chrislusf/seaweedfs", "latest")
+    let config = load_testcontainers_config();
+    let image = &config.images.seaweedfs;
+
+    let seaweedfs_image = GenericImage::new(image.repository.as_str(), image.tag.as_str())
       .with_mapped_port(host_port, ContainerPort::Tcp(8333))
       .with_env_var("AWS_ACCESS_KEY_ID", access_key.clone())
       .with_env_var("AWS_SECRET_ACCESS_KEY", secret_key.clone())
-      .with_cmd(["server", "-s3", "-dir=/data"]);
+      .with_mount(Mount::bind_mount(
+        tls_dir.path().to_string_lossy().to_string(),
+        "/opt/tls",
+      ))
+      .with_cmd([
+        "server",
+        "-s3",
+        "-dir=/data",
+        "-s3.cert.file=/opt/tls/public.crt",
+        "-s3.key.file=/opt/tls/private.key",
+      ]);
     let container = seaweedfs_image
       .start()
       .await
@@ -507,13 +810,16 @@ impl SeaweedfsTestContainer {
       host_port,
       access_key,
       secret_key,
+      use_https: true,
+      _tls_dir: Some(tls_dir),
       _seaweedfs_lock: lock,
     }
   }
 
   /// Get the endpoint URL for this SeaweedFS instance
   pub fn endpoint_url(&self) -> String {
-    format!("http://localhost:{}", self.host_port)
+    let scheme = if self.use_https { "https" } else { "http" };
+    format!("{}://localhost:{}", scheme, self.host_port)
   }
 
   /// Create a storage config for this SeaweedFS instance
@@ -528,6 +834,7 @@ impl SeaweedfsTestContainer {
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
       force_path_style: true,
+      sse: None,
       timeout: 30,
     }
   }
@@ -538,7 +845,13 @@ impl SeaweedfsTestContainer {
     base_url.region = "us-east-1".to_string();
     base_url.virtual_style = false;
     let static_provider = StaticProvider::new(&self.access_key, &self.secret_key, None);
-    let client = Client::new(base_url, Some(Box::new(static_provider)), None, None)?;
+    let (ssl_cert_file, ignore_cert_check) = minio_tls_options();
+    let client = Client::new(
+      base_url,
+      Some(Box::new(static_provider)),
+      ssl_cert_file.as_deref(),
+      ignore_cert_check,
+    )?;
     Ok(client)
   }
 
@@ -592,12 +905,12 @@ impl SeaweedfsTestContainer {
     Err("SeaweedFS bucket not ready after creation".into())
   }
 
-  /// Create a bucket and return a configured MinioStorage instance
+  /// Create a bucket and return a configured NxCacheStorage instance
   #[allow(dead_code)]
   pub async fn create_storage(
     &self,
     bucket_name: &str,
-  ) -> Result<MinioStorage, Box<dyn std::error::Error>> {
+  ) -> Result<NxCacheStorage, Box<dyn std::error::Error>> {
     // Wait a bit for SeaweedFS to be fully ready
     tokio::time::sleep(tokio::time::Duration::from_secs(8)).await;
 
@@ -607,11 +920,11 @@ impl SeaweedfsTestContainer {
     // Create storage config
     let config = self.create_storage_config(bucket_name.to_string());
 
-    // Create MinioStorage instance (S3-compatible)
-    let storage = MinioStorage::from_resolved_bucket(&config)
+    // Create NxCacheStorage instance (S3-compatible)
+    let storage = NxCacheStorage::from_resolved_bucket(&config)
       .await
       .map_err(|e| {
-        Box::<dyn std::error::Error>::from(format!("Failed to create MinioStorage: {:?}", e))
+        Box::<dyn std::error::Error>::from(format!("Failed to create NxCacheStorage: {:?}", e))
       })?;
 
     let max_retries = 10;
@@ -806,6 +1119,7 @@ impl LocalstackTestContainer {
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
       force_path_style: true,
+      sse: None,
       timeout: 30,
     }
   }
@@ -857,21 +1171,21 @@ impl LocalstackTestContainer {
     Ok(())
   }
 
-  /// Create a bucket and return a configured MinioStorage instance
+  /// Create a bucket and return a configured NxCacheStorage instance
   #[allow(dead_code)]
   pub async fn create_storage(
     &self,
     bucket_name: &str,
-  ) -> Result<MinioStorage, Box<dyn std::error::Error>> {
+  ) -> Result<NxCacheStorage, Box<dyn std::error::Error>> {
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     self.create_bucket(bucket_name).await?;
 
     let config = self.create_storage_config(bucket_name.to_string());
 
-    MinioStorage::from_resolved_bucket(&config)
+    NxCacheStorage::from_resolved_bucket(&config)
       .await
-      .map_err(|e| format!("Failed to create MinioStorage: {:?}", e).into())
+      .map_err(|e| format!("Failed to create NxCacheStorage: {:?}", e).into())
   }
 
   /// List objects in a bucket using LocalStack client
@@ -1045,6 +1359,7 @@ impl S3MockTestContainer {
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
       force_path_style: true,
+      sse: None,
       timeout: 30,
     }
   }
@@ -1096,21 +1411,21 @@ impl S3MockTestContainer {
     Ok(())
   }
 
-  /// Create a bucket and return a configured MinioStorage instance
+  /// Create a bucket and return a configured NxCacheStorage instance
   #[allow(dead_code)]
   pub async fn create_storage(
     &self,
     bucket_name: &str,
-  ) -> Result<MinioStorage, Box<dyn std::error::Error>> {
+  ) -> Result<NxCacheStorage, Box<dyn std::error::Error>> {
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     self.create_bucket(bucket_name).await?;
 
     let config = self.create_storage_config(bucket_name.to_string());
 
-    MinioStorage::from_resolved_bucket(&config)
+    NxCacheStorage::from_resolved_bucket(&config)
       .await
-      .map_err(|e| format!("Failed to create MinioStorage: {:?}", e).into())
+      .map_err(|e| format!("Failed to create NxCacheStorage: {:?}", e).into())
   }
 
   /// List objects in a bucket using S3Mock client
@@ -1285,6 +1600,7 @@ impl GoFakeS3TestContainer {
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
       force_path_style: true,
+      sse: None,
       timeout: 30,
     }
   }
@@ -1336,21 +1652,21 @@ impl GoFakeS3TestContainer {
     Ok(())
   }
 
-  /// Create a bucket and return a configured MinioStorage instance
+  /// Create a bucket and return a configured NxCacheStorage instance
   #[allow(dead_code)]
   pub async fn create_storage(
     &self,
     bucket_name: &str,
-  ) -> Result<MinioStorage, Box<dyn std::error::Error>> {
+  ) -> Result<NxCacheStorage, Box<dyn std::error::Error>> {
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     self.create_bucket(bucket_name).await?;
 
     let config = self.create_storage_config(bucket_name.to_string());
 
-    MinioStorage::from_resolved_bucket(&config)
+    NxCacheStorage::from_resolved_bucket(&config)
       .await
-      .map_err(|e| format!("Failed to create MinioStorage: {:?}", e).into())
+      .map_err(|e| format!("Failed to create NxCacheStorage: {:?}", e).into())
   }
 
   /// List objects in a bucket using GoFakeS3 client
@@ -1520,7 +1836,10 @@ metrics_token = "test-metrics-token"
       .expect("Failed to read bound port for Garage")
       .port();
 
-    let garage_image = GenericImage::new("dxflrs/garage", "v2.2.0")
+    let config = load_testcontainers_config();
+    let image = &config.images.garage;
+
+    let garage_image = GenericImage::new(image.repository.as_str(), image.tag.as_str())
       .with_mapped_port(host_port, ContainerPort::Tcp(3900))
       .with_cmd(["/garage", "-c", "/etc/garage.toml", "server"])
       .with_mount(Mount::bind_mount(
@@ -1572,6 +1891,7 @@ metrics_token = "test-metrics-token"
       region: Some("garage".to_string()),
       endpoint_url: Some(self.endpoint_url()),
       force_path_style: true,
+      sse: None,
       timeout: 30,
     }
   }
@@ -1897,18 +2217,18 @@ metrics_token = "test-metrics-token"
     Ok(())
   }
 
-  /// Create a bucket and return a configured MinioStorage instance
+  /// Create a bucket and return a configured NxCacheStorage instance
   #[allow(dead_code)]
   pub async fn create_storage(
     &self,
     bucket_name: &str,
-  ) -> Result<MinioStorage, Box<dyn std::error::Error>> {
+  ) -> Result<NxCacheStorage, Box<dyn std::error::Error>> {
     self.create_bucket(bucket_name).await?;
 
     let config = self.create_storage_config(bucket_name.to_string());
-    MinioStorage::from_resolved_bucket(&config)
+    NxCacheStorage::from_resolved_bucket(&config)
       .await
-      .map_err(|e| format!("Failed to create MinioStorage: {:?}", e).into())
+      .map_err(|e| format!("Failed to create NxCacheStorage: {:?}", e).into())
   }
 }
 
