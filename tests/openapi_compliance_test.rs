@@ -44,6 +44,7 @@ async fn create_test_app(minio: &MinioTestContainer) -> (Router, String) {
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(minio.endpoint_url()),
       force_path_style: true,
+      sse: None,
       timeout: 60,
     }],
     service_access_tokens: vec![ResolvedServiceAccessToken {

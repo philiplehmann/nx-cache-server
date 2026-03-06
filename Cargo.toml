@@ -16,6 +16,8 @@ axum = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_yml = "0.0.12"
 toml = "1.0"
+serde_json = "1.0"
+base64 = "0.22"
 clap = { version = "4.5", features = ["derive", "env"] }
 async-trait = "0.1"
 tokio-util = { version = "0.7", features = ["io"] }
@@ -29,6 +31,8 @@ futures-util = { version = "0.3", default-features = false, features = ["std", "
 [dev-dependencies]
 testcontainers = { version = "0.27.0", features = ["blocking"] }
 testcontainers-modules = { version = "0.15.0", features = ["minio"] }
+rcgen = "0.13"
+tempfile = "3"
 tower = "0.5"
 
 [profile.release]
