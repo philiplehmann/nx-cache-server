@@ -30,7 +30,6 @@ async fn test_seaweedfs_sse_s3_store_and_retrieve() {
   run_store_and_retrieve("SeaweedFS SSE-S3", |bucket_name| {
     let container = &container;
     async move {
-      sleep(Duration::from_secs(8)).await;
       container.create_bucket(bucket_name.as_str()).await?;
 
       let mut config = container.create_storage_config(bucket_name);
@@ -66,7 +65,6 @@ async fn test_seaweedfs_sse_c_store_and_retrieve() {
   run_store_and_retrieve("SeaweedFS SSE-C", |bucket_name| {
     let container = &container;
     async move {
-      sleep(Duration::from_secs(8)).await;
       container.create_bucket(bucket_name.as_str()).await?;
 
       let mut config = container.create_storage_config(bucket_name);
@@ -104,7 +102,6 @@ async fn test_seaweedfs_sse_kms_store_and_retrieve() {
   run_store_and_retrieve("SeaweedFS SSE-KMS", |bucket_name| {
     let container = &container;
     async move {
-      sleep(Duration::from_secs(8)).await;
       container.create_bucket(bucket_name.as_str()).await?;
 
       let mut config = container.create_storage_config(bucket_name);
