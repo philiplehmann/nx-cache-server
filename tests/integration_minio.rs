@@ -5,7 +5,7 @@ use common::storage_contract::{
 };
 use common::MinioTestContainer;
 use nx_cache_server::domain::config::ResolvedSseConfig;
-use nx_cache_server::infra::minio::NxCacheStorage;
+use nx_cache_server::infra::nx_cache_store::NxCacheStorage;
 
 const SSE_C_KEY: &str = "0123456789abcdef0123456789abcdef";
 
