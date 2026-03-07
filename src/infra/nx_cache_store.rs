@@ -1,10 +1,9 @@
 use async_trait::async_trait;
-use futures_util::StreamExt;
 use minio::s3::builders::ObjectContent;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::sse::{Sse, SseCustomerKey, SseKms, SseS3};
-use minio::s3::types::{S3Api, ToStream};
+use minio::s3::types::S3Api;
 use minio::s3::Client;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -32,6 +31,13 @@ impl NxCacheStorage {
     error_message.contains("404")
       || error_message.contains("Not Found")
       || error_message.contains("NoSuchKey")
+  }
+
+  fn is_sse_c_key_mismatch(error_message: &str) -> bool {
+    let message = error_message.to_ascii_lowercase();
+    message.contains("the provided key does not match")
+      || (message.contains("invalidrequest") && message.contains("sse"))
+      || (message.contains("badrequest") && message.contains("sse"))
   }
 
   fn is_retryable_error(error_message: &str) -> bool {
@@ -160,31 +166,12 @@ impl StorageProvider for NxCacheStorage {
         // MinIO returns 404 for non-existent objects
         if Self::is_not_found_error(&err_msg) {
           Ok(false)
-        } else if self.sse_customer_key.is_some() {
+        } else if self.sse_customer_key.is_some() && Self::is_sse_c_key_mismatch(&err_msg) {
           tracing::debug!(
-            "MinIO stat_object failed with SSE-C, falling back to list_objects: {:?}",
+            "MinIO stat_object failed with SSE-C (key mismatch), treating as exists: {:?}",
             e
           );
-
-          let mut stream = self
-            .client
-            .list_objects(&self.bucket_name)
-            .recursive(true)
-            .to_stream()
-            .await;
-
-          while let Some(result) = stream.next().await {
-            let response = result.map_err(|e| {
-              tracing::error!("MinIO list_objects failed: {:?}", e);
-              StorageError::OperationFailed
-            })?;
-
-            if response.contents.iter().any(|item| item.name == hash) {
-              return Ok(true);
-            }
-          }
-
-          Ok(false)
+          Ok(true)
         } else {
           tracing::error!("MinIO stat_object failed: {:?}", e);
           Err(StorageError::OperationFailed)
