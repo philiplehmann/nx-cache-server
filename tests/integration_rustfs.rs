@@ -5,8 +5,13 @@ use common::storage_contract::{
 };
 use common::RustfsTestContainer;
 use nx_cache_server::domain::config::ResolvedSseConfig;
+use nx_cache_server::domain::storage::StorageProvider;
+use minio::s3::types::S3Api;
 use nx_cache_server::infra::minio::NxCacheStorage;
+use std::io::Cursor;
+use tokio::io::AsyncReadExt;
 use tokio::time::Duration;
+use tokio_util::io::ReaderStream;
 
 const SSE_C_KEY: &str = "0123456789abcdef0123456789abcdef";
 
@@ -104,24 +109,72 @@ async fn test_rustfs_sse_c_store_and_retrieve() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_rustfs_sse_kms_store_and_retrieve() {
   let container = RustfsTestContainer::start().await;
+  let bucket_name = "test-bucket";
 
-  run_store_and_retrieve("RustFS SSE-KMS", |bucket_name| {
-    let container = &container;
-    async move {
-      tokio::time::sleep(Duration::from_secs(2)).await;
-      container.create_bucket(bucket_name.as_str()).await?;
+  tokio::time::sleep(Duration::from_secs(2)).await;
+  container
+    .create_bucket(bucket_name)
+    .await
+    .expect("Failed to create RustFS bucket");
 
-      let mut config = container.create_storage_config(bucket_name);
-      config.sse = Some(ResolvedSseConfig::SseKms {
-        key_id: "test-kms-key".to_string(),
-        context: None,
-      });
+  let mut config = container.create_storage_config(bucket_name.to_string());
+  config.sse = Some(ResolvedSseConfig::SseKms {
+    key_id: "test-kms-key".to_string(),
+    context: None,
+  });
 
-      let storage = NxCacheStorage::from_resolved_bucket(&config).await?;
-      Ok(storage)
-    }
-  })
-  .await;
+  let storage = NxCacheStorage::from_resolved_bucket(&config)
+    .await
+    .expect("Failed to create RustFS SSE-KMS storage");
+
+  let test_hash = "test-hash-12345";
+  let test_data = b"RustFS SSE-KMS test data".to_vec();
+  let test_data_len = test_data.len() as u64;
+
+  let cursor = Cursor::new(test_data.clone());
+  let reader_stream = ReaderStream::new(cursor);
+
+  storage
+    .store(test_hash, reader_stream, Some(test_data_len))
+    .await
+    .expect("Failed to store data with SSE-KMS");
+
+  let client = container
+    .create_rustfs_client()
+    .await
+    .expect("Failed to create RustFS client");
+  let stat = client
+    .stat_object(bucket_name, test_hash)
+    .send()
+    .await
+    .expect("Failed to stat object for SSE-KMS headers");
+
+  let sse_header = stat
+    .headers
+    .get("x-amz-server-side-encryption")
+    .and_then(|value| value.to_str().ok())
+    .unwrap_or_default();
+
+  assert!(
+    matches!(sse_header, "aws:kms" | "aws:kms:dsse"),
+    "Expected SSE-KMS header, got {:?}",
+    sse_header
+  );
+
+  let mut reader = storage
+    .retrieve(test_hash)
+    .await
+    .expect("Failed to retrieve data");
+  let mut retrieved_data = Vec::new();
+  reader
+    .read_to_end(&mut retrieved_data)
+    .await
+    .expect("Failed to read retrieved data");
+
+  assert_eq!(
+    retrieved_data, test_data,
+    "Retrieved data should match stored data"
+  );
 }
 
 /// Test using helper methods to verify direct RustFS operations
