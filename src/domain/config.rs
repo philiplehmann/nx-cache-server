@@ -100,6 +100,22 @@ pub struct BucketConfig {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub endpoint_url: Option<String>,
 
+  /// TLS CA certificate bundle path for custom endpoints
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub tls_ca_file: Option<String>,
+
+  /// Environment variable name holding TLS CA certificate bundle path
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub tls_ca_file_env: Option<String>,
+
+  /// Disable TLS certificate verification (use with care)
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub insecure_tls: Option<bool>,
+
+  /// Environment variable name holding TLS verification flag
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub insecure_tls_env: Option<String>,
+
   /// Force path-style addressing (required for MinIO and some S3-compatible services)
   #[serde(default)]
   pub force_path_style: bool,
@@ -305,6 +321,14 @@ impl Config {
         None => None,
       };
 
+      let tls_ca_file =
+        Self::resolve_optional_env(&bucket.tls_ca_file, &bucket.tls_ca_file_env)?;
+      let insecure_tls = Self::resolve_optional_bool_env(
+        &bucket.insecure_tls,
+        &bucket.insecure_tls_env,
+        &format!("Bucket '{}': insecureTls", bucket.name),
+      )?;
+
       resolved_buckets.push(ResolvedBucketConfig {
         name: bucket.name.clone(),
         bucket_name: bucket.bucket_name.clone(),
@@ -313,6 +337,8 @@ impl Config {
         session_token,
         region: bucket.region.clone(),
         endpoint_url: bucket.endpoint_url.clone(),
+        tls_ca_file,
+        insecure_tls,
         force_path_style: bucket.force_path_style,
         sse,
         timeout: bucket.timeout,
@@ -353,6 +379,31 @@ impl Config {
       (None, Some(env_name)) => match std::env::var(env_name) {
         Ok(v) => Ok(Some(v)),
         Err(_) => Ok(None), // Environment variable not set is OK for optional fields
+      },
+      (None, None) => Ok(None),
+    }
+  }
+
+  fn resolve_optional_bool_env(
+    value: &Option<bool>,
+    env_var: &Option<String>,
+    field_name: &str,
+  ) -> Result<Option<bool>, ConfigError> {
+    match (value, env_var) {
+      (Some(v), _) => Ok(Some(*v)),
+      (None, Some(env_name)) => match std::env::var(env_name) {
+        Ok(v) => {
+          let normalized = v.trim().to_ascii_lowercase();
+          match normalized.as_str() {
+            "1" | "true" | "yes" | "y" => Ok(Some(true)),
+            "0" | "false" | "no" | "n" => Ok(Some(false)),
+            _ => Err(ConfigError::Validation(format!(
+              "{}: environment variable '{}' must be a boolean value",
+              field_name, env_name
+            ))),
+          }
+        },
+        Err(_) => Ok(None),
       },
       (None, None) => Ok(None),
     }
@@ -645,6 +696,14 @@ pub struct TomlBucketConfig {
   pub region: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub endpoint_url: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub tls_ca_file: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub tls_ca_file_env: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub insecure_tls: Option<bool>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub insecure_tls_env: Option<String>,
   #[serde(default)]
   pub force_path_style: bool,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -716,6 +775,10 @@ impl From<TomlBucketConfig> for BucketConfig {
       session_token_env: value.session_token_env,
       region: value.region,
       endpoint_url: value.endpoint_url,
+      tls_ca_file: value.tls_ca_file,
+      tls_ca_file_env: value.tls_ca_file_env,
+      insecure_tls: value.insecure_tls,
+      insecure_tls_env: value.insecure_tls_env,
       force_path_style: value.force_path_style,
       sse: value.sse.map(SseConfig::from),
       timeout: value.timeout,
@@ -780,6 +843,8 @@ pub struct ResolvedBucketConfig {
   pub session_token: Option<String>,
   pub region: Option<String>,
   pub endpoint_url: Option<String>,
+  pub tls_ca_file: Option<String>,
+  pub insecure_tls: Option<bool>,
   pub force_path_style: bool,
   pub sse: Option<ResolvedSseConfig>,
   pub timeout: u64,
@@ -865,6 +930,10 @@ mod tests {
         session_token_env: None,
         region: Some("us-west-2".to_string()),
         endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
         force_path_style: false,
         sse: None,
         timeout: 30,
@@ -892,6 +961,10 @@ mod tests {
           session_token_env: None,
           region: Some("us-west-2".to_string()),
           endpoint_url: None,
+          tls_ca_file: None,
+          tls_ca_file_env: None,
+          insecure_tls: None,
+          insecure_tls_env: None,
           force_path_style: false,
           sse: None,
           timeout: 30,
@@ -907,6 +980,10 @@ mod tests {
           session_token_env: None,
           region: Some("us-west-2".to_string()),
           endpoint_url: None,
+          tls_ca_file: None,
+          tls_ca_file_env: None,
+          insecure_tls: None,
+          insecure_tls_env: None,
           force_path_style: false,
           sse: None,
           timeout: 30,
@@ -940,6 +1017,10 @@ mod tests {
         session_token_env: None,
         region: Some("us-west-2".to_string()),
         endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
         force_path_style: false,
         sse: None,
         timeout: 30,
@@ -972,6 +1053,10 @@ mod tests {
         session_token_env: None,
         region: Some("us-west-2".to_string()),
         endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
         force_path_style: false,
         sse: None,
         timeout: 30,
@@ -1004,6 +1089,10 @@ mod tests {
         session_token_env: None,
         region: Some("us-west-2".to_string()),
         endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
         force_path_style: false,
         sse: Some(SseConfig {
           sse_type: SseType::SseKms,
@@ -1050,6 +1139,10 @@ mod tests {
         session_token_env: None,
         region: Some("us-west-2".to_string()),
         endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
         force_path_style: false,
         sse: Some(SseConfig {
           sse_type: SseType::SseC,
@@ -1100,6 +1193,10 @@ mod tests {
         session_token_env: None,
         region: Some("us-west-2".to_string()),
         endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
         force_path_style: false,
         sse: Some(SseConfig {
           sse_type: SseType::SseC,

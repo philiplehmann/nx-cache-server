@@ -81,24 +81,7 @@ fn validate_image_config(image: &ImageConfig, name: &str) {
   }
 }
 
-fn minio_tls_options() -> (Option<PathBuf>, Option<bool>) {
-  let ssl_cert_file = std::env::var("SSL_CERT_FILE")
-    .ok()
-    .filter(|value| !value.trim().is_empty())
-    .map(PathBuf::from)
-    .filter(|path| path.exists());
 
-  let ignore_cert_check = std::env::var("NX_CACHE_SERVER_INSECURE_TLS")
-    .ok()
-    .map(|value| value.to_ascii_lowercase())
-    .and_then(|value| match value.as_str() {
-      "1" | "true" | "yes" | "y" => Some(true),
-      "0" | "false" | "no" | "n" => Some(false),
-      _ => None,
-    });
-
-  (ssl_cert_file, ignore_cert_check)
-}
 
 fn create_minio_tls_certs() -> Result<TempDir, Box<dyn std::error::Error>> {
   let mut params = CertificateParams::new(vec!["localhost".to_string()])?;
@@ -204,15 +187,6 @@ impl MinioTestContainer {
     let image = &config.images.minio;
 
     let tls_dir = create_minio_tls_certs().expect("Failed to create MinIO TLS certs");
-    std::env::set_var("NX_CACHE_SERVER_INSECURE_TLS", "1");
-    std::env::set_var(
-      "SSL_CERT_FILE",
-      tls_dir
-        .path()
-        .join("public.crt")
-        .to_string_lossy()
-        .to_string(),
-    );
 
     let minio_image = GenericImage::new(image.repository.as_str(), image.tag.as_str())
       .with_exposed_port(ContainerPort::Tcp(9000))
@@ -286,6 +260,11 @@ impl MinioTestContainer {
       session_token: None,
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
+      tls_ca_file: self
+        ._tls_dir
+        .as_ref()
+        .map(|dir| dir.path().join("public.crt").to_string_lossy().to_string()),
+      insecure_tls: if self.use_https { Some(true) } else { None },
       force_path_style: true,
       sse: None,
       timeout: 30,
@@ -296,7 +275,16 @@ impl MinioTestContainer {
   pub async fn create_minio_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
     let base_url = self.endpoint_url().parse::<BaseUrl>()?;
     let static_provider = StaticProvider::new(&self.access_key, &self.secret_key, None);
-    let (ssl_cert_file, ignore_cert_check) = minio_tls_options();
+    let ssl_cert_file = if self.use_https {
+      self
+        ._tls_dir
+        .as_ref()
+        .map(|dir| dir.path().join("public.crt"))
+        .filter(|path| path.exists())
+    } else {
+      None
+    };
+    let ignore_cert_check = if self.use_https { Some(true) } else { None };
     let client = Client::new(
       base_url,
       Some(Box::new(static_provider)),
@@ -485,15 +473,6 @@ impl RustfsTestContainer {
     let secret_key = "rustfsadmin".to_string();
 
     let tls_dir = create_rustfs_tls_certs().expect("Failed to create RustFS TLS certs");
-    std::env::set_var("NX_CACHE_SERVER_INSECURE_TLS", "1");
-    std::env::set_var(
-      "SSL_CERT_FILE",
-      tls_dir
-        .path()
-        .join("rustfs_cert.pem")
-        .to_string_lossy()
-        .to_string(),
-    );
 
     let config = load_testcontainers_config();
     let image = &config.images.rustfs;
@@ -543,6 +522,11 @@ impl RustfsTestContainer {
       session_token: None,
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
+      tls_ca_file: self
+        ._tls_dir
+        .as_ref()
+        .map(|dir| dir.path().join("rustfs_cert.pem").to_string_lossy().to_string()),
+      insecure_tls: if self.use_https { Some(true) } else { None },
       force_path_style: true,
       sse: None,
       timeout: 30,
@@ -553,7 +537,16 @@ impl RustfsTestContainer {
   pub async fn create_rustfs_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
     let base_url = self.endpoint_url().parse::<BaseUrl>()?;
     let static_provider = StaticProvider::new(&self.access_key, &self.secret_key, None);
-    let (ssl_cert_file, ignore_cert_check) = minio_tls_options();
+    let ssl_cert_file = if self.use_https {
+      self
+        ._tls_dir
+        .as_ref()
+        .map(|dir| dir.path().join("rustfs_cert.pem"))
+        .filter(|path| path.exists())
+    } else {
+      None
+    };
+    let ignore_cert_check = if self.use_https { Some(true) } else { None };
     let client = Client::new(
       base_url,
       Some(Box::new(static_provider)),
@@ -751,15 +744,6 @@ impl SeaweedfsTestContainer {
     let secret_key = "key".to_string();
 
     let tls_dir = create_minio_tls_certs().expect("Failed to create SeaweedFS TLS certs");
-    std::env::set_var("NX_CACHE_SERVER_INSECURE_TLS", "1");
-    std::env::set_var(
-      "SSL_CERT_FILE",
-      tls_dir
-        .path()
-        .join("public.crt")
-        .to_string_lossy()
-        .to_string(),
-    );
 
     let host_port = std::net::TcpListener::bind("127.0.0.1:0")
       .expect("Failed to bind random host port for SeaweedFS")
@@ -833,6 +817,11 @@ impl SeaweedfsTestContainer {
       session_token: None,
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
+      tls_ca_file: self
+        ._tls_dir
+        .as_ref()
+        .map(|dir| dir.path().join("public.crt").to_string_lossy().to_string()),
+      insecure_tls: if self.use_https { Some(true) } else { None },
       force_path_style: true,
       sse: None,
       timeout: 30,
@@ -845,7 +834,16 @@ impl SeaweedfsTestContainer {
     base_url.region = "us-east-1".to_string();
     base_url.virtual_style = false;
     let static_provider = StaticProvider::new(&self.access_key, &self.secret_key, None);
-    let (ssl_cert_file, ignore_cert_check) = minio_tls_options();
+    let ssl_cert_file = if self.use_https {
+      self
+        ._tls_dir
+        .as_ref()
+        .map(|dir| dir.path().join("public.crt"))
+        .filter(|path| path.exists())
+    } else {
+      None
+    };
+    let ignore_cert_check = if self.use_https { Some(true) } else { None };
     let client = Client::new(
       base_url,
       Some(Box::new(static_provider)),
@@ -1118,6 +1116,8 @@ impl LocalstackTestContainer {
       session_token: None,
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
+      tls_ca_file: None,
+      insecure_tls: None,
       force_path_style: true,
       sse: None,
       timeout: 30,
@@ -1358,6 +1358,8 @@ impl S3MockTestContainer {
       session_token: None,
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
+      tls_ca_file: None,
+      insecure_tls: None,
       force_path_style: true,
       sse: None,
       timeout: 30,
@@ -1599,6 +1601,8 @@ impl GoFakeS3TestContainer {
       session_token: None,
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(self.endpoint_url()),
+      tls_ca_file: None,
+      insecure_tls: None,
       force_path_style: true,
       sse: None,
       timeout: 30,
@@ -1890,6 +1894,8 @@ metrics_token = "test-metrics-token"
       session_token: None,
       region: Some("garage".to_string()),
       endpoint_url: Some(self.endpoint_url()),
+      tls_ca_file: None,
+      insecure_tls: None,
       force_path_style: true,
       sse: None,
       timeout: 30,

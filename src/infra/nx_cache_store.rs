@@ -114,21 +114,32 @@ impl NxCacheStorage {
       },
     };
 
-    let ssl_cert_file = std::env::var("SSL_CERT_FILE")
-      .ok()
+    let ssl_cert_file = bucket_config
+      .tls_ca_file
+      .as_ref()
       .map(|value| value.trim().to_string())
       .filter(|value| !value.is_empty())
       .map(PathBuf::from)
-      .filter(|path| path.is_file());
-
-    let ignore_cert_check = std::env::var("NX_CACHE_SERVER_INSECURE_TLS")
-      .ok()
-      .map(|value| value.trim().to_ascii_lowercase())
-      .and_then(|value| match value.as_str() {
-        "1" | "true" | "yes" | "y" => Some(true),
-        "0" | "false" | "no" | "n" => Some(false),
-        _ => None,
+      .filter(|path| path.is_file())
+      .or_else(|| {
+        std::env::var("SSL_CERT_FILE")
+          .ok()
+          .map(|value| value.trim().to_string())
+          .filter(|value| !value.is_empty())
+          .map(PathBuf::from)
+          .filter(|path| path.is_file())
       });
+
+    let ignore_cert_check = bucket_config.insecure_tls.or_else(|| {
+      std::env::var("NX_CACHE_SERVER_INSECURE_TLS")
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .and_then(|value| match value.as_str() {
+          "1" | "true" | "yes" | "y" => Some(true),
+          "0" | "false" | "no" | "n" => Some(false),
+          _ => None,
+        })
+    });
 
     let client = Client::new(
       base_url,
