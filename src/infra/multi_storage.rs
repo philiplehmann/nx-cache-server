@@ -8,7 +8,7 @@ use crate::domain::{
   config::{ResolvedConfig, ResolvedServiceAccessToken},
   storage::{StorageError, StorageProvider},
 };
-use crate::infra::minio::NxCacheStorage;
+use crate::infra::nx_cache_store::NxCacheStorage;
 
 /// Storage router that manages multiple S3 buckets and routes requests
 /// based on access tokens and their associated prefixes
