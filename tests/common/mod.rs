@@ -88,6 +88,9 @@ struct RetryConfig {
   delay: Duration,
 }
 
+type Error = dyn std::error::Error;
+type TestResult<T> = Result<T, Box<Error>>;
+
 fn env_usize(key: &str, default: usize) -> usize {
   match std::env::var(key) {
     Ok(value) => match value.parse::<usize>() {
@@ -123,7 +126,7 @@ fn retry_config(prefix: &str, default_retries: usize, default_delay_ms: u64) -> 
   }
 }
 
-fn box_err(message: impl Into<String>) -> Box<dyn std::error::Error> {
+fn box_err(message: impl Into<String>) -> Box<Error> {
   Box::new(std::io::Error::new(
     std::io::ErrorKind::Other,
     message.into(),
@@ -135,7 +138,7 @@ async fn wait_for_tcp_ready(
   port: u16,
   config: RetryConfig,
   label: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> TestResult<()> {
   let address = format!("{}:{}", host, port);
   for attempt in 0..config.retries {
     match TcpStream::connect(address.as_str()).await {
@@ -166,7 +169,7 @@ async fn wait_for_storage_ready(
   storage: &NxCacheStorage,
   label: &str,
   config: RetryConfig,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> TestResult<()> {
   for attempt in 0..config.retries {
     match storage.test_connection().await {
       Ok(_) => {
@@ -197,13 +200,16 @@ async fn ensure_bucket_exists(
   bucket_name: &str,
   config: RetryConfig,
   label: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> TestResult<()> {
   for attempt in 0..config.retries {
     let exists = match client.bucket_exists(bucket_name).send().await {
       Ok(response) => response.exists,
       Err(e) => {
         if attempt + 1 == config.retries {
-          return Err(Box::new(e));
+          return Err(box_err(format!(
+            "{} bucket exists check failed after {} attempts: {}",
+            label, config.retries, e
+          )));
         }
         debug!(label, bucket_name, attempt, error = %e, "Bucket exists check failed");
         tokio::time::sleep(config.delay).await;
@@ -219,7 +225,10 @@ async fn ensure_bucket_exists(
       Ok(_) => return Ok(()),
       Err(e) => {
         if attempt + 1 == config.retries {
-          return Err(Box::new(e));
+          return Err(box_err(format!(
+            "{} bucket creation failed after {} attempts: {}",
+            label, config.retries, e
+          )));
         }
         debug!(label, bucket_name, attempt, error = %e, "Bucket creation failed");
         tokio::time::sleep(config.delay).await;
@@ -239,7 +248,7 @@ fn create_s3_client(
   secret_key: &str,
   tls_cert: Option<&Path>,
   insecure_tls: bool,
-) -> Result<Client, Box<dyn std::error::Error>> {
+) -> TestResult<Client> {
   let static_provider = StaticProvider::new(access_key, secret_key, None);
   let ignore_cert_check = if insecure_tls { Some(true) } else { None };
   let client = Client::new(
@@ -277,7 +286,7 @@ fn create_tls_certs(
   cert_filename: &str,
   key_filename: &str,
   set_permissions: bool,
-) -> Result<TlsMaterial, Box<dyn std::error::Error>> {
+) -> TestResult<TlsMaterial> {
   let mut params = CertificateParams::new(vec!["localhost".to_string()])?;
   params
     .subject_alt_names
@@ -311,11 +320,11 @@ fn create_tls_certs(
   })
 }
 
-fn create_minio_tls_certs() -> Result<TlsMaterial, Box<dyn std::error::Error>> {
+fn create_minio_tls_certs() -> TestResult<TlsMaterial> {
   create_tls_certs("minio-tls-", "public.crt", "private.key", false)
 }
 
-fn create_rustfs_tls_certs() -> Result<TlsMaterial, Box<dyn std::error::Error>> {
+fn create_rustfs_tls_certs() -> TestResult<TlsMaterial> {
   create_tls_certs("rustfs-tls-", "rustfs_cert.pem", "rustfs_key.pem", true)
 }
 
