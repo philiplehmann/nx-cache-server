@@ -27,7 +27,7 @@ use tokio::sync::Mutex;
 
 use nx_cache_server::domain::config::ResolvedBucketConfig;
 use nx_cache_server::domain::storage::StorageProvider;
-use nx_cache_server::infra::minio::NxCacheStorage;
+use nx_cache_server::infra::nx_cache_store::NxCacheStorage;
 
 #[derive(Debug, Deserialize)]
 struct TestcontainersConfig {

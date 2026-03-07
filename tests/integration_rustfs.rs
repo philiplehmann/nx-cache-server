@@ -7,7 +7,7 @@ use common::RustfsTestContainer;
 use nx_cache_server::domain::config::ResolvedSseConfig;
 use nx_cache_server::domain::storage::StorageProvider;
 use minio::s3::types::S3Api;
-use nx_cache_server::infra::minio::NxCacheStorage;
+use nx_cache_server::infra::nx_cache_store::NxCacheStorage;
 use std::io::Cursor;
 use tokio::io::AsyncReadExt;
 use tokio::time::Duration;
