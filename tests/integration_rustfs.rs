@@ -10,7 +10,7 @@ use nx_cache_server::domain::storage::StorageProvider;
 use nx_cache_server::infra::nx_cache_store::NxCacheStorage;
 use std::io::Cursor;
 use tokio::io::AsyncReadExt;
-use tokio::time::Duration;
+
 use tokio_util::io::ReaderStream;
 
 const SSE_C_KEY: &str = "0123456789abcdef0123456789abcdef";
@@ -71,7 +71,6 @@ async fn test_rustfs_sse_s3_store_and_retrieve() {
   run_store_and_retrieve("RustFS SSE-S3", |bucket_name| {
     let container = &container;
     async move {
-      tokio::time::sleep(Duration::from_secs(2)).await;
       container.create_bucket(bucket_name.as_str()).await?;
 
       let mut config = container.create_storage_config(bucket_name);
@@ -91,7 +90,6 @@ async fn test_rustfs_sse_c_store_and_retrieve() {
   run_store_and_retrieve("RustFS SSE-C", |bucket_name| {
     let container = &container;
     async move {
-      tokio::time::sleep(Duration::from_secs(2)).await;
       container.create_bucket(bucket_name.as_str()).await?;
 
       let mut config = container.create_storage_config(bucket_name);
@@ -111,7 +109,6 @@ async fn test_rustfs_sse_kms_store_and_retrieve() {
   let container = RustfsTestContainer::start().await;
   let bucket_name = "test-bucket";
 
-  tokio::time::sleep(Duration::from_secs(2)).await;
   container
     .create_bucket(bucket_name)
     .await
