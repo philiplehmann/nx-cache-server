@@ -4,9 +4,9 @@ use common::storage_contract::{
   run_retrieve_nonexistent_fails, run_store_and_retrieve,
 };
 use common::RustfsTestContainer;
+use minio::s3::types::S3Api;
 use nx_cache_server::domain::config::ResolvedSseConfig;
 use nx_cache_server::domain::storage::StorageProvider;
-use minio::s3::types::S3Api;
 use nx_cache_server::infra::nx_cache_store::NxCacheStorage;
 use std::io::Cursor;
 use tokio::io::AsyncReadExt;
