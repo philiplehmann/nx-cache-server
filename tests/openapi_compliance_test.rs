@@ -43,6 +43,8 @@ async fn create_test_app(minio: &MinioTestContainer) -> (Router, String) {
       session_token: None,
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(minio.endpoint_url()),
+      tls_ca_file: None,
+      insecure_tls: None,
       force_path_style: true,
       sse: None,
       timeout: 60,
