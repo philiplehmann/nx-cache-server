@@ -214,10 +214,11 @@ impl StorageProvider for NxCacheStorage {
       .send()
       .await
       .map_err(|e| {
-        tracing::error!("MinIO put_object_content failed: {:?}", e);
-        eprintln!(
+        tracing::error!(
           "MinIO put_object_content failed (sse_enabled={}, sse_customer_key_enabled={}): {:?}",
-          sse_enabled, sse_customer_key_enabled, e
+          sse_enabled,
+          sse_customer_key_enabled,
+          e
         );
         StorageError::OperationFailed
       })?;
