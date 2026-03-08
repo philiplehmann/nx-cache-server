@@ -886,8 +886,9 @@ sse = { type = "sse_c", customer_key_base64_env = "NX_SSE_C_KEY", customer_key_m
 MinIO      | ✅     | ✅      | ✅
 SeaweedFS  | ✅     | ❌      | ✅
 Garage     | ✅     | ❌      | ❌
-RustFS     | ❌     | ✅      | ✅</code>
+RustFS     | ❌     | ❓      | ✅</code>
                     </div>
+                    <p style="margin-top: 0.5rem;">Note: RustFS SSE-KMS is not covered by integration tests because the test container does not configure a KMS key.</p>
                     <p style="margin-top: 0.5rem;">TOML uses snake_case keys and types:</p>
                     <div class="code-block">
                         <code>sse_s3, sse_kms, sse_c

@@ -150,7 +150,9 @@ SSE support matrix (integration test coverage):
 | MinIO      | ✅     | ✅      | ✅    |
 | SeaweedFS  | ✅     | ❌      | ✅    |
 | Garage     | ✅     | ❌      | ❌    |
-| RustFS     | ❌     | ✅      | ✅    |
+| RustFS     | ❌     | ❓      | ✅    |
+
+Note: RustFS SSE-KMS is not covered by integration tests because the test container does not configure a KMS key.
 
 #### SSE examples (YAML)
 
