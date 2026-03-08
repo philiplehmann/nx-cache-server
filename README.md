@@ -143,6 +143,14 @@ Note: Garage does not support SSE-C in our integration tests; use a different ba
 SSE-KMS support depends on backend configuration; the Garage SSE-KMS integration test is ignored.
 Note: SeaweedFS does not support SSE-KMS in our integration tests.
 
+### TLS (custom CA / insecure)
+You can control TLS behavior for S3-compatible endpoints with the following environment variables:
+
+- `SSL_CERT_FILE` — Absolute path to a PEM-encoded CA bundle. When set, it is used as the trusted root certificates for the S3 client. Useful for certificate pinning with self-hosted MinIO or private PKI.
+- `NX_CACHE_SERVER_INSECURE_TLS` — Set to `1`, `true`, `yes`, or `y` to disable TLS certificate verification. Set to `0`, `false`, `no`, or `n` to explicitly enable verification. Only use this for development or controlled environments.
+
+These values act as defaults for per-bucket `tlsCaFile`/`tlsCaFileEnv` and `insecureTls`/`insecureTlsEnv` settings; if a bucket sets its own values, the bucket configuration takes precedence.
+
 SSE support matrix (integration test coverage):
 
 | Service    | SSE-S3 | SSE-KMS | SSE-C |
