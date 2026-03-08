@@ -517,12 +517,7 @@ impl Config {
         bucket_name
       )));
     }
-    String::from_utf8(decoded).map_err(|_| {
-      ConfigError::Validation(format!(
-        "Bucket '{}': sse.customerKeyBase64 must decode to valid UTF-8",
-        bucket_name
-      ))
-    })
+    Ok(key_b64.to_string())
   }
 
   fn validate_sse_c_md5(bucket_name: &str, md5_b64: &str) -> Result<(), ConfigError> {
@@ -1176,9 +1171,9 @@ mod tests {
   #[test]
   fn test_resolve_sse_c_from_env() {
     let key_env = "NX_CACHE_SSE_C_KEY_TEST";
-    let key_value = "0123456789abcdef0123456789abcdef";
-    let key_value_b64 = general_purpose::STANDARD.encode(key_value);
-    std::env::set_var(key_env, key_value_b64);
+    let key_value = b"0123456789abcdef0123456789abcdef".to_vec();
+    let key_value_b64 = general_purpose::STANDARD.encode(&key_value);
+    std::env::set_var(key_env, &key_value_b64);
 
     let config = Config {
       buckets: vec![BucketConfig {
@@ -1224,7 +1219,7 @@ mod tests {
     let resolved = config.resolve_env_vars().expect("Expected resolved config");
     let bucket = resolved.get_bucket("bucket1").expect("bucket not found");
     match &bucket.sse {
-      Some(ResolvedSseConfig::SseC { key }) => assert_eq!(key, key_value),
+      Some(ResolvedSseConfig::SseC { key }) => assert_eq!(key, &key_value_b64),
       _ => panic!("Expected sseC configuration"),
     }
 
