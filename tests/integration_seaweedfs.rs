@@ -3,10 +3,9 @@ use common::storage_contract::{
   run_duplicate_store_fails, run_helper_operations_contract, run_large_file_streaming,
   run_retrieve_nonexistent_fails, run_store_and_retrieve,
 };
-use common::SeaweedfsTestContainer;
+use common::{retry_config, wait_for_storage_ready, SeaweedfsTestContainer};
 use nx_cache_server::domain::config::ResolvedSseConfig;
 use nx_cache_server::infra::nx_cache_store::NxCacheStorage;
-use tokio::time::{sleep, Duration};
 
 const SSE_C_KEY: &str = "0123456789abcdef0123456789abcdef";
 
@@ -39,19 +38,9 @@ async fn test_seaweedfs_sse_s3_store_and_retrieve() {
         .await
         .map_err(|e| format!("Failed to create SeaweedFS SSE-S3 storage: {:?}", e))?;
 
-      let max_retries = 10;
-      let retry_delay = Duration::from_secs(1);
-      for attempt in 0..max_retries {
-        if storage.test_connection().await.is_ok() {
-          return Ok(storage);
-        }
-        if attempt + 1 == max_retries {
-          break;
-        }
-        sleep(retry_delay).await;
-      }
-
-      Err("SeaweedFS SSE-S3 storage not ready".into())
+      let readiness = retry_config("NX_CACHE_TEST_SEAWEEDFS_STORAGE_READY", 10, 1000);
+      wait_for_storage_ready(&storage, "SeaweedFS SSE-S3 storage", readiness).await?;
+      Ok(storage)
     }
   })
   .await;
@@ -76,19 +65,9 @@ async fn test_seaweedfs_sse_c_store_and_retrieve() {
         .await
         .map_err(|e| format!("Failed to create SeaweedFS SSE-C storage: {:?}", e))?;
 
-      let max_retries = 10;
-      let retry_delay = Duration::from_secs(1);
-      for attempt in 0..max_retries {
-        if storage.test_connection().await.is_ok() {
-          return Ok(storage);
-        }
-        if attempt + 1 == max_retries {
-          break;
-        }
-        sleep(retry_delay).await;
-      }
-
-      Err("SeaweedFS SSE-C storage not ready".into())
+      let readiness = retry_config("NX_CACHE_TEST_SEAWEEDFS_STORAGE_READY", 10, 1000);
+      wait_for_storage_ready(&storage, "SeaweedFS SSE-C storage", readiness).await?;
+      Ok(storage)
     }
   })
   .await;
@@ -114,19 +93,9 @@ async fn test_seaweedfs_sse_kms_store_and_retrieve() {
         .await
         .map_err(|e| format!("Failed to create SeaweedFS SSE-KMS storage: {:?}", e))?;
 
-      let max_retries = 10;
-      let retry_delay = Duration::from_secs(1);
-      for attempt in 0..max_retries {
-        if storage.test_connection().await.is_ok() {
-          return Ok(storage);
-        }
-        if attempt + 1 == max_retries {
-          break;
-        }
-        sleep(retry_delay).await;
-      }
-
-      Err("SeaweedFS SSE-KMS storage not ready".into())
+      let readiness = retry_config("NX_CACHE_TEST_SEAWEEDFS_STORAGE_READY", 10, 1000);
+      wait_for_storage_ready(&storage, "SeaweedFS SSE-KMS storage", readiness).await?;
+      Ok(storage)
     }
   })
   .await;

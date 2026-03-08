@@ -83,7 +83,7 @@ fn validate_image_config(image: &ImageConfig, name: &str) {
   }
 }
 
-struct RetryConfig {
+pub struct RetryConfig {
   retries: usize,
   delay: Duration,
 }
@@ -117,7 +117,7 @@ fn env_u64(key: &str, default: u64) -> u64 {
   }
 }
 
-fn retry_config(prefix: &str, default_retries: usize, default_delay_ms: u64) -> RetryConfig {
+pub fn retry_config(prefix: &str, default_retries: usize, default_delay_ms: u64) -> RetryConfig {
   let retries = env_usize(&format!("{prefix}_RETRIES"), default_retries).max(1);
   let delay_ms = env_u64(&format!("{prefix}_DELAY_MS"), default_delay_ms).max(1);
   RetryConfig {
@@ -162,7 +162,7 @@ async fn wait_for_tcp_ready(
   )))
 }
 
-async fn wait_for_storage_ready(
+pub async fn wait_for_storage_ready(
   storage: &NxCacheStorage,
   label: &str,
   config: RetryConfig,
