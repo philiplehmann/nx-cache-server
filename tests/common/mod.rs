@@ -127,10 +127,7 @@ fn retry_config(prefix: &str, default_retries: usize, default_delay_ms: u64) -> 
 }
 
 fn box_err(message: impl Into<String>) -> Box<Error> {
-  Box::new(std::io::Error::new(
-    std::io::ErrorKind::Other,
-    message.into(),
-  ))
+  Box::new(std::io::Error::other(message.into()))
 }
 
 async fn wait_for_tcp_ready(
