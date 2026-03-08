@@ -321,8 +321,7 @@ impl Config {
         None => None,
       };
 
-      let tls_ca_file =
-        Self::resolve_optional_env(&bucket.tls_ca_file, &bucket.tls_ca_file_env)?;
+      let tls_ca_file = Self::resolve_optional_env(&bucket.tls_ca_file, &bucket.tls_ca_file_env)?;
       let insecure_tls = Self::resolve_optional_bool_env(
         &bucket.insecure_tls,
         &bucket.insecure_tls_env,
