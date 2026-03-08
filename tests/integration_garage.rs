@@ -3,11 +3,11 @@ use common::storage_contract::{
   run_duplicate_store_fails, run_helper_operations_contract, run_large_file_streaming,
   run_retrieve_nonexistent_fails, run_store_and_retrieve,
 };
-use common::GarageTestContainer;
+use common::{GarageTestContainer, SSE_C_KEY};
 use nx_cache_server::domain::config::ResolvedSseConfig;
 use nx_cache_server::infra::nx_cache_store::NxCacheStorage;
 
-const SSE_C_KEY: &str = "0123456789abcdef0123456789abcdef";
+
 
 /// Integration test that verifies NxCacheStorage works with Garage (S3-compatible)
 #[tokio::test(flavor = "multi_thread")]
