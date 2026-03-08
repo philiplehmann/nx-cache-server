@@ -259,7 +259,10 @@ async fn test_multiple_namespaces_in_one_bucket() {
       session_token: None,
       region: Some("us-east-1".to_string()),
       endpoint_url: Some(minio.endpoint_url()),
+      tls_ca_file: None,
+      insecure_tls: None,
       force_path_style: true,
+      sse: None,
       timeout: 60,
     }],
     service_access_tokens: vec![
