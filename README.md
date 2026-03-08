@@ -136,7 +136,7 @@ You can enable SSE per bucket with the `sse` block:
 
 - `type: sseS3` – AES256 managed by S3.
 - `type: sseKms` – AWS/MinIO KMS; requires `kmsKeyId` or `kmsKeyIdEnv`. Optional `kmsContext`/`kmsContextEnv` can be a map/object of string pairs or a JSON object string.
-- `type: sseC` – customer-provided key; requires `customerKeyBase64` or `customerKeyBase64Env` (must decode to 32 bytes of UTF-8 data). Optional `customerKeyMd5Base64` can be provided for validation. SSE-C requires HTTPS and the same key for reads.
+- `type: sseC` – customer-provided key; requires `customerKeyBase64` or `customerKeyBase64Env` (must decode to 32 bytes). Optional `customerKeyMd5Base64` can be provided for validation. SSE-C requires HTTPS and the same key for reads.
 
 SSE-C keys are sensitive; store them in environment variables or a secrets manager and never log or commit them.
 Note: Garage does not support SSE-C in our integration tests; use a different backend if you need SSE-C.
