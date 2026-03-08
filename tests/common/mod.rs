@@ -266,8 +266,6 @@ struct TlsMaterial {
 }
 
 impl TlsMaterial {
-
-
   fn dir_path_string(&self) -> String {
     self.dir.path().to_string_lossy().to_string()
   }
@@ -314,10 +312,7 @@ fn create_tls_certs(
     fs::set_permissions(&key_path, Permissions::from_mode(0o644))?;
   }
 
-  Ok(TlsMaterial {
-    dir,
-    cert_path,
-  })
+  Ok(TlsMaterial { dir, cert_path })
 }
 
 fn create_minio_tls_certs() -> TestResult<TlsMaterial> {
@@ -641,10 +636,7 @@ impl RustfsTestContainer {
       .with_env_var("RUSTFS_ACCESS_KEY", access_key.clone())
       .with_env_var("RUSTFS_SECRET_KEY", secret_key.clone())
       .with_env_var("RUSTFS_TLS_PATH", "/opt/tls")
-      .with_mount(Mount::bind_mount(
-        tls.dir_path_string(),
-        "/opt/tls",
-      ));
+      .with_mount(Mount::bind_mount(tls.dir_path_string(), "/opt/tls"));
     let container = rustfs_image
       .start()
       .await
@@ -871,7 +863,12 @@ impl SeaweedfsTestContainer {
     let tls = create_minio_tls_certs()?;
 
     let host_port = std::net::TcpListener::bind("127.0.0.1:0")
-      .map_err(|e| box_err(format!("Failed to bind random host port for SeaweedFS: {}", e)))?
+      .map_err(|e| {
+        box_err(format!(
+          "Failed to bind random host port for SeaweedFS: {}",
+          e
+        ))
+      })?
       .local_addr()
       .map_err(|e| box_err(format!("Failed to read bound port for SeaweedFS: {}", e)))?
       .port();
@@ -883,10 +880,7 @@ impl SeaweedfsTestContainer {
       .with_mapped_port(host_port, ContainerPort::Tcp(8333))
       .with_env_var("AWS_ACCESS_KEY_ID", access_key.clone())
       .with_env_var("AWS_SECRET_ACCESS_KEY", secret_key.clone())
-      .with_mount(Mount::bind_mount(
-        tls.dir_path_string(),
-        "/opt/tls",
-      ))
+      .with_mount(Mount::bind_mount(tls.dir_path_string(), "/opt/tls"))
       .with_cmd([
         "server",
         "-s3",
@@ -901,7 +895,10 @@ impl SeaweedfsTestContainer {
 
     let readiness = retry_config("NX_CACHE_TEST_SEAWEEDFS_READINESS", 30, 500);
     wait_for_tcp_ready("127.0.0.1", host_port, readiness, "SeaweedFS").await?;
-    info!(service = "seaweedfs", host_port, "SeaweedFS container ready");
+    info!(
+      service = "seaweedfs",
+      host_port, "SeaweedFS container ready"
+    );
 
     Ok(Self {
       container,
@@ -1058,13 +1055,14 @@ impl SeaweedfsTestContainer {
       let cursor = std::io::Cursor::new(data.clone());
       let reader_stream = tokio_util::io::ReaderStream::new(cursor);
 
-      match storage.store(object_name, reader_stream, Some(data_len)).await {
+      match storage
+        .store(object_name, reader_stream, Some(data_len))
+        .await
+      {
         Ok(()) => return Ok(()),
         Err(StorageError::OperationFailed) => {
           if attempt + 1 == retry.retries {
-            return Err(
-              "Failed to store object via SeaweedFS storage after retries".into(),
-            );
+            return Err("Failed to store object via SeaweedFS storage after retries".into());
           }
           tokio::time::sleep(retry.delay).await;
         },
@@ -1156,7 +1154,10 @@ impl LocalstackTestContainer {
 
     let readiness = retry_config("NX_CACHE_TEST_LOCALSTACK_READINESS", 30, 500);
     wait_for_tcp_ready("127.0.0.1", host_port, readiness, "LocalStack").await?;
-    info!(service = "localstack", host_port, "LocalStack container ready");
+    info!(
+      service = "localstack",
+      host_port, "LocalStack container ready"
+    );
 
     Ok(Self {
       container,
@@ -1195,13 +1196,7 @@ impl LocalstackTestContainer {
     let mut base_url = self.endpoint_url().parse::<BaseUrl>()?;
     base_url.region = "us-east-1".to_string();
     base_url.virtual_style = false;
-    create_s3_client(
-      base_url,
-      &self.access_key,
-      &self.secret_key,
-      None,
-      false,
-    )
+    create_s3_client(base_url, &self.access_key, &self.secret_key, None, false)
   }
 
   /// Create a bucket in this LocalStack instance
@@ -1410,13 +1405,7 @@ impl S3MockTestContainer {
     let mut base_url = self.endpoint_url().parse::<BaseUrl>()?;
     base_url.region = "us-east-1".to_string();
     base_url.virtual_style = false;
-    create_s3_client(
-      base_url,
-      &self.access_key,
-      &self.secret_key,
-      None,
-      false,
-    )
+    create_s3_client(base_url, &self.access_key, &self.secret_key, None, false)
   }
 
   /// Create a bucket in this S3Mock instance
@@ -1626,13 +1615,7 @@ impl GoFakeS3TestContainer {
     let mut base_url = self.endpoint_url().parse::<BaseUrl>()?;
     base_url.region = "us-east-1".to_string();
     base_url.virtual_style = false;
-    create_s3_client(
-      base_url,
-      &self.access_key,
-      &self.secret_key,
-      None,
-      false,
-    )
+    create_s3_client(base_url, &self.access_key, &self.secret_key, None, false)
   }
 
   /// Create a bucket in this GoFakeS3 instance
@@ -2113,13 +2096,7 @@ metrics_token = "test-metrics-token"
     let mut base_url = self.endpoint_url().parse::<BaseUrl>()?;
     base_url.region = "garage".to_string();
     base_url.virtual_style = false;
-    create_s3_client(
-      base_url,
-      &self.access_key,
-      &self.secret_key,
-      None,
-      false,
-    )
+    create_s3_client(base_url, &self.access_key, &self.secret_key, None, false)
   }
 
   /// List objects in a bucket using Garage client
