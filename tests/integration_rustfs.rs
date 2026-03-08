@@ -105,6 +105,7 @@ async fn test_rustfs_sse_c_store_and_retrieve() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[ignore = "RustFS test container does not configure KMS, so SSE-KMS is not supported in this environment"]
 async fn test_rustfs_sse_kms_store_and_retrieve() {
   let container = RustfsTestContainer::start().await;
   let bucket_name = "test-bucket";
