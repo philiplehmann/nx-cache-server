@@ -651,21 +651,13 @@ pub enum TomlSseType {
 pub struct TomlSseConfig {
   #[serde(rename = "type")]
   pub sse_type: TomlSseType,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub kms_key_id: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub kms_key_id_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub kms_context: Option<KmsContext>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub kms_context_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub customer_key_base64: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub customer_key_base64_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub customer_key_md5_base64: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub customer_key_md5_base64_env: Option<String>,
 }
 
@@ -674,33 +666,20 @@ pub struct TomlSseConfig {
 pub struct TomlBucketConfig {
   pub name: String,
   pub bucket_name: String,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub access_key_id: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub access_key_id_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub secret_access_key: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub secret_access_key_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub session_token: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub session_token_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub region: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub endpoint_url: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub tls_ca_file: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub tls_ca_file_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub insecure_tls: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub insecure_tls_env: Option<String>,
   #[serde(default)]
   pub force_path_style: bool,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub sse: Option<TomlSseConfig>,
   #[serde(default = "default_timeout")]
   pub timeout: u64,
