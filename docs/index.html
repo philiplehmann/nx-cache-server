@@ -821,6 +821,14 @@ nx-cache-server --config config.toml</code>
                     <p style="color: var(--text-light);">SSE-C keys are sensitive; store them in environment variables or a secrets manager and never log or commit them.</p>
                     <p style="color: var(--text-light);">Compatibility notes: Garage does not support SSE-C; SeaweedFS does not support SSE-KMS in integration tests. SSE-KMS support depends on backend configuration.</p>
 
+                    <h3 style="margin-top: 1.5rem;">TLS (custom CA / insecure)</h3>
+                    <p style="margin-top: 0.5rem;">You can control TLS behavior for S3-compatible endpoints with the following environment variables:</p>
+                    <ul>
+                        <li><strong>SSL_CERT_FILE</strong> — absolute path to a PEM-encoded CA bundle used as trusted root certificates for the S3 client. Useful for certificate pinning with self-hosted MinIO or private PKI.</li>
+                        <li><strong>NX_CACHE_SERVER_INSECURE_TLS</strong> — set to <code>1</code>, <code>true</code>, <code>yes</code>, or <code>y</code> to disable TLS certificate verification; set to <code>0</code>, <code>false</code>, <code>no</code>, or <code>n</code> to explicitly enable verification. Use only for development or controlled environments.</li>
+                    </ul>
+                    <p style="color: var(--text-light);">These values act as defaults for per-bucket <code>tlsCaFile</code>/<code>tlsCaFileEnv</code> and <code>insecureTls</code>/<code>insecureTlsEnv</code> settings; if a bucket sets its own values, the bucket configuration takes precedence.</p>
+
                     <h4 style="margin-top: 1rem;">YAML examples</h4>
                     <div class="code-block">
                         <code># SSE-S3
