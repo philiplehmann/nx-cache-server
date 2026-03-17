@@ -1,3 +1,5 @@
+use base64::engine::general_purpose;
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -17,6 +19,44 @@ pub enum ConfigError {
   Validation(String),
   #[error("Environment variable not found: {0}")]
   EnvVarNotFound(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum SseType {
+  SseS3,
+  SseKms,
+  SseC,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum KmsContext {
+  Map(HashMap<String, String>),
+  JsonString(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SseConfig {
+  #[serde(rename = "type")]
+  pub sse_type: SseType,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub kms_key_id: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub kms_key_id_env: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub kms_context: Option<KmsContext>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub kms_context_env: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub customer_key_base64: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub customer_key_base64_env: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub customer_key_md5_base64: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub customer_key_md5_base64_env: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,9 +100,29 @@ pub struct BucketConfig {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub endpoint_url: Option<String>,
 
+  /// TLS CA certificate bundle path for custom endpoints
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub tls_ca_file: Option<String>,
+
+  /// Environment variable name holding TLS CA certificate bundle path
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub tls_ca_file_env: Option<String>,
+
+  /// Disable TLS certificate verification (use with care)
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub insecure_tls: Option<bool>,
+
+  /// Environment variable name holding TLS verification flag
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub insecure_tls_env: Option<String>,
+
   /// Force path-style addressing (required for MinIO and some S3-compatible services)
   #[serde(default)]
   pub force_path_style: bool,
+
+  /// Server-side encryption configuration (optional)
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub sse: Option<SseConfig>,
 
   /// S3 operation timeout in seconds
   #[serde(default = "default_timeout")]
@@ -256,6 +316,18 @@ impl Config {
         _ => {},
       }
 
+      let sse = match &bucket.sse {
+        Some(sse) => Some(Self::resolve_sse(&bucket.name, sse)?),
+        None => None,
+      };
+
+      let tls_ca_file = Self::resolve_optional_env(&bucket.tls_ca_file, &bucket.tls_ca_file_env)?;
+      let insecure_tls = Self::resolve_optional_bool_env(
+        &bucket.insecure_tls,
+        &bucket.insecure_tls_env,
+        &format!("Bucket '{}': insecureTls", bucket.name),
+      )?;
+
       resolved_buckets.push(ResolvedBucketConfig {
         name: bucket.name.clone(),
         bucket_name: bucket.bucket_name.clone(),
@@ -264,7 +336,10 @@ impl Config {
         session_token,
         region: bucket.region.clone(),
         endpoint_url: bucket.endpoint_url.clone(),
+        tls_ca_file,
+        insecure_tls,
         force_path_style: bucket.force_path_style,
+        sse,
         timeout: bucket.timeout,
       });
     }
@@ -308,6 +383,31 @@ impl Config {
     }
   }
 
+  fn resolve_optional_bool_env(
+    value: &Option<bool>,
+    env_var: &Option<String>,
+    field_name: &str,
+  ) -> Result<Option<bool>, ConfigError> {
+    match (value, env_var) {
+      (Some(v), _) => Ok(Some(*v)),
+      (None, Some(env_name)) => match std::env::var(env_name) {
+        Ok(v) => {
+          let normalized = v.trim().to_ascii_lowercase();
+          match normalized.as_str() {
+            "1" | "true" | "yes" | "y" => Ok(Some(true)),
+            "0" | "false" | "no" | "n" => Ok(Some(false)),
+            _ => Err(ConfigError::Validation(format!(
+              "{}: environment variable '{}' must be a boolean value",
+              field_name, env_name
+            ))),
+          }
+        },
+        Err(_) => Ok(None),
+      },
+      (None, None) => Ok(None),
+    }
+  }
+
   /// Resolve a required field that must be a value or env var reference
   fn resolve_required_env(
     value: &Option<String>,
@@ -326,6 +426,193 @@ impl Config {
         "{}: must be provided",
         field_name
       ))),
+    }
+  }
+
+  fn serialize_kms_context(
+    bucket_name: &str,
+    context: &KmsContext,
+    field_name: &str,
+  ) -> Result<String, ConfigError> {
+    match context {
+      KmsContext::Map(map) => serde_json::to_string(map).map_err(|_| {
+        ConfigError::Validation(format!(
+          "Bucket '{}': {} could not be serialized",
+          bucket_name, field_name
+        ))
+      }),
+      KmsContext::JsonString(value) => {
+        if value.trim().is_empty() {
+          return Err(ConfigError::Validation(format!(
+            "Bucket '{}': {} cannot be empty",
+            bucket_name, field_name
+          )));
+        }
+        let parsed: HashMap<String, String> = serde_json::from_str(value).map_err(|_| {
+          ConfigError::Validation(format!(
+            "Bucket '{}': {} must be a JSON object of string values",
+            bucket_name, field_name
+          ))
+        })?;
+        serde_json::to_string(&parsed).map_err(|_| {
+          ConfigError::Validation(format!(
+            "Bucket '{}': {} could not be serialized",
+            bucket_name, field_name
+          ))
+        })
+      },
+    }
+  }
+
+  fn resolve_kms_context(
+    bucket_name: &str,
+    kms_context: &Option<KmsContext>,
+    kms_context_env: &Option<String>,
+  ) -> Result<Option<String>, ConfigError> {
+    if let Some(context) = kms_context {
+      let serialized = Self::serialize_kms_context(bucket_name, context, "sse.kmsContext")?;
+      return Ok(Some(serialized));
+    }
+
+    if let Some(env_name) = kms_context_env {
+      match std::env::var(env_name) {
+        Ok(value) => {
+          if value.trim().is_empty() {
+            return Err(ConfigError::Validation(format!(
+              "Bucket '{}': sse.kmsContext cannot be empty",
+              bucket_name
+            )));
+          }
+          let parsed: HashMap<String, String> = serde_json::from_str(&value).map_err(|_| {
+            ConfigError::Validation(format!(
+              "Bucket '{}': sse.kmsContextEnv must be a JSON object of string values",
+              bucket_name
+            ))
+          })?;
+          let serialized = serde_json::to_string(&parsed).map_err(|_| {
+            ConfigError::Validation(format!(
+              "Bucket '{}': sse.kmsContextEnv could not be serialized",
+              bucket_name
+            ))
+          })?;
+          return Ok(Some(serialized));
+        },
+        Err(_) => return Ok(None),
+      }
+    }
+
+    Ok(None)
+  }
+
+  fn decode_sse_c_key(bucket_name: &str, key_b64: &str) -> Result<String, ConfigError> {
+    let decoded = general_purpose::STANDARD.decode(key_b64).map_err(|_| {
+      ConfigError::Validation(format!(
+        "Bucket '{}': sse.customerKeyBase64 must be valid base64",
+        bucket_name
+      ))
+    })?;
+    if decoded.len() != 32 {
+      return Err(ConfigError::Validation(format!(
+        "Bucket '{}': sse.customerKeyBase64 must decode to 32 bytes",
+        bucket_name
+      )));
+    }
+    Ok(key_b64.to_string())
+  }
+
+  fn validate_sse_c_md5(bucket_name: &str, md5_b64: &str) -> Result<(), ConfigError> {
+    let decoded = general_purpose::STANDARD.decode(md5_b64).map_err(|_| {
+      ConfigError::Validation(format!(
+        "Bucket '{}': sse.customerKeyMd5Base64 must be valid base64",
+        bucket_name
+      ))
+    })?;
+    if decoded.len() != 16 {
+      return Err(ConfigError::Validation(format!(
+        "Bucket '{}': sse.customerKeyMd5Base64 must decode to 16 bytes",
+        bucket_name
+      )));
+    }
+    Ok(())
+  }
+
+  fn resolve_sse(bucket_name: &str, sse: &SseConfig) -> Result<ResolvedSseConfig, ConfigError> {
+    match &sse.sse_type {
+      SseType::SseS3 => {
+        if sse.kms_key_id.is_some()
+          || sse.kms_key_id_env.is_some()
+          || sse.kms_context.is_some()
+          || sse.kms_context_env.is_some()
+          || sse.customer_key_base64.is_some()
+          || sse.customer_key_base64_env.is_some()
+          || sse.customer_key_md5_base64.is_some()
+          || sse.customer_key_md5_base64_env.is_some()
+        {
+          return Err(ConfigError::Validation(format!(
+            "Bucket '{}': sseS3 does not allow KMS or customer key fields",
+            bucket_name
+          )));
+        }
+        Ok(ResolvedSseConfig::SseS3)
+      },
+      SseType::SseKms => {
+        if sse.customer_key_base64.is_some()
+          || sse.customer_key_base64_env.is_some()
+          || sse.customer_key_md5_base64.is_some()
+          || sse.customer_key_md5_base64_env.is_some()
+        {
+          return Err(ConfigError::Validation(format!(
+            "Bucket '{}': sseKms does not allow customerKey fields",
+            bucket_name
+          )));
+        }
+        let key_id = Self::resolve_required_env(
+          &sse.kms_key_id,
+          &sse.kms_key_id_env,
+          &format!("Bucket '{}': sse.kmsKeyId", bucket_name),
+        )?;
+        if key_id.trim().is_empty() {
+          return Err(ConfigError::Validation(format!(
+            "Bucket '{}': sse.kmsKeyId cannot be empty",
+            bucket_name
+          )));
+        }
+        let context =
+          Self::resolve_kms_context(bucket_name, &sse.kms_context, &sse.kms_context_env)?;
+        Ok(ResolvedSseConfig::SseKms { key_id, context })
+      },
+      SseType::SseC => {
+        if sse.kms_key_id.is_some()
+          || sse.kms_key_id_env.is_some()
+          || sse.kms_context.is_some()
+          || sse.kms_context_env.is_some()
+        {
+          return Err(ConfigError::Validation(format!(
+            "Bucket '{}': sseC does not allow KMS fields",
+            bucket_name
+          )));
+        }
+        let key_b64 = Self::resolve_required_env(
+          &sse.customer_key_base64,
+          &sse.customer_key_base64_env,
+          &format!("Bucket '{}': sse.customerKeyBase64", bucket_name),
+        )?;
+        if key_b64.trim().is_empty() {
+          return Err(ConfigError::Validation(format!(
+            "Bucket '{}': sse.customerKeyBase64 cannot be empty",
+            bucket_name
+          )));
+        }
+        let key = Self::decode_sse_c_key(bucket_name, &key_b64)?;
+        let md5_b64 = Self::resolve_optional_env(
+          &sse.customer_key_md5_base64,
+          &sse.customer_key_md5_base64_env,
+        )?;
+        if let Some(md5_b64) = md5_b64 {
+          Self::validate_sse_c_md5(bucket_name, &md5_b64)?;
+        }
+        Ok(ResolvedSseConfig::SseC { key })
+      },
     }
   }
 
@@ -351,29 +638,49 @@ impl Config {
   }
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum TomlSseType {
+  SseS3,
+  SseKms,
+  SseC,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TomlSseConfig {
+  #[serde(rename = "type")]
+  pub sse_type: TomlSseType,
+  pub kms_key_id: Option<String>,
+  pub kms_key_id_env: Option<String>,
+  pub kms_context: Option<KmsContext>,
+  pub kms_context_env: Option<String>,
+  pub customer_key_base64: Option<String>,
+  pub customer_key_base64_env: Option<String>,
+  pub customer_key_md5_base64: Option<String>,
+  pub customer_key_md5_base64_env: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct TomlBucketConfig {
   pub name: String,
   pub bucket_name: String,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub access_key_id: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub access_key_id_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub secret_access_key: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub secret_access_key_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub session_token: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub session_token_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub region: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub endpoint_url: Option<String>,
+  pub tls_ca_file: Option<String>,
+  pub tls_ca_file_env: Option<String>,
+  pub insecure_tls: Option<bool>,
+  pub insecure_tls_env: Option<String>,
   #[serde(default)]
   pub force_path_style: bool,
+  pub sse: Option<TomlSseConfig>,
   #[serde(default = "default_timeout")]
   pub timeout: u64,
 }
@@ -402,6 +709,32 @@ pub struct TomlConfig {
   pub debug: bool,
 }
 
+impl From<TomlSseType> for SseType {
+  fn from(value: TomlSseType) -> Self {
+    match value {
+      TomlSseType::SseS3 => SseType::SseS3,
+      TomlSseType::SseKms => SseType::SseKms,
+      TomlSseType::SseC => SseType::SseC,
+    }
+  }
+}
+
+impl From<TomlSseConfig> for SseConfig {
+  fn from(value: TomlSseConfig) -> Self {
+    Self {
+      sse_type: value.sse_type.into(),
+      kms_key_id: value.kms_key_id,
+      kms_key_id_env: value.kms_key_id_env,
+      kms_context: value.kms_context,
+      kms_context_env: value.kms_context_env,
+      customer_key_base64: value.customer_key_base64,
+      customer_key_base64_env: value.customer_key_base64_env,
+      customer_key_md5_base64: value.customer_key_md5_base64,
+      customer_key_md5_base64_env: value.customer_key_md5_base64_env,
+    }
+  }
+}
+
 impl From<TomlBucketConfig> for BucketConfig {
   fn from(value: TomlBucketConfig) -> Self {
     Self {
@@ -415,7 +748,12 @@ impl From<TomlBucketConfig> for BucketConfig {
       session_token_env: value.session_token_env,
       region: value.region,
       endpoint_url: value.endpoint_url,
+      tls_ca_file: value.tls_ca_file,
+      tls_ca_file_env: value.tls_ca_file_env,
+      insecure_tls: value.insecure_tls,
+      insecure_tls_env: value.insecure_tls_env,
       force_path_style: value.force_path_style,
+      sse: value.sse.map(SseConfig::from),
       timeout: value.timeout,
     }
   }
@@ -458,6 +796,18 @@ pub struct ResolvedConfig {
 }
 
 #[derive(Debug, Clone)]
+pub enum ResolvedSseConfig {
+  SseS3,
+  SseKms {
+    key_id: String,
+    context: Option<String>,
+  },
+  SseC {
+    key: String,
+  },
+}
+
+#[derive(Debug, Clone)]
 pub struct ResolvedBucketConfig {
   pub name: String,
   pub bucket_name: String,
@@ -466,7 +816,10 @@ pub struct ResolvedBucketConfig {
   pub session_token: Option<String>,
   pub region: Option<String>,
   pub endpoint_url: Option<String>,
+  pub tls_ca_file: Option<String>,
+  pub insecure_tls: Option<bool>,
   pub force_path_style: bool,
+  pub sse: Option<ResolvedSseConfig>,
   pub timeout: u64,
 }
 
@@ -550,7 +903,12 @@ mod tests {
         session_token_env: None,
         region: Some("us-west-2".to_string()),
         endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
         force_path_style: false,
+        sse: None,
         timeout: 30,
       }],
       service_access_tokens: vec![],
@@ -576,7 +934,12 @@ mod tests {
           session_token_env: None,
           region: Some("us-west-2".to_string()),
           endpoint_url: None,
+          tls_ca_file: None,
+          tls_ca_file_env: None,
+          insecure_tls: None,
+          insecure_tls_env: None,
           force_path_style: false,
+          sse: None,
           timeout: 30,
         },
         BucketConfig {
@@ -590,7 +953,12 @@ mod tests {
           session_token_env: None,
           region: Some("us-west-2".to_string()),
           endpoint_url: None,
+          tls_ca_file: None,
+          tls_ca_file_env: None,
+          insecure_tls: None,
+          insecure_tls_env: None,
           force_path_style: false,
+          sse: None,
           timeout: 30,
         },
       ],
@@ -622,7 +990,12 @@ mod tests {
         session_token_env: None,
         region: Some("us-west-2".to_string()),
         endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
         force_path_style: false,
+        sse: None,
         timeout: 30,
       }],
       service_access_tokens: vec![ServiceAccessTokenConfig {
@@ -653,7 +1026,12 @@ mod tests {
         session_token_env: None,
         region: Some("us-west-2".to_string()),
         endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
         force_path_style: false,
+        sse: None,
         timeout: 30,
       }],
       service_access_tokens: vec![ServiceAccessTokenConfig {
@@ -668,6 +1046,163 @@ mod tests {
     };
 
     assert!(config.validate().is_ok());
+  }
+
+  #[test]
+  fn test_resolve_sse_kms_requires_key() {
+    let config = Config {
+      buckets: vec![BucketConfig {
+        name: "bucket1".to_string(),
+        bucket_name: "my-bucket".to_string(),
+        access_key_id: None,
+        access_key_id_env: None,
+        secret_access_key: None,
+        secret_access_key_env: None,
+        session_token: None,
+        session_token_env: None,
+        region: Some("us-west-2".to_string()),
+        endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
+        force_path_style: false,
+        sse: Some(SseConfig {
+          sse_type: SseType::SseKms,
+          kms_key_id: None,
+          kms_key_id_env: None,
+          kms_context: None,
+          kms_context_env: None,
+          customer_key_base64: None,
+          customer_key_base64_env: None,
+          customer_key_md5_base64: None,
+          customer_key_md5_base64_env: None,
+        }),
+        timeout: 30,
+      }],
+      service_access_tokens: vec![ServiceAccessTokenConfig {
+        name: "test".to_string(),
+        bucket: "bucket1".to_string(),
+        prefix: "/ci".to_string(),
+        access_token: Some("token".to_string()),
+        access_token_env: None,
+      }],
+      port: 3000,
+      debug: false,
+    };
+
+    let err = config
+      .resolve_env_vars()
+      .expect_err("Expected sseKms validation error");
+    assert!(matches!(err, ConfigError::Validation(_)));
+  }
+
+  #[test]
+  fn test_resolve_sse_c_requires_32_bytes() {
+    let short_key_b64 = general_purpose::STANDARD.encode("short");
+    let config = Config {
+      buckets: vec![BucketConfig {
+        name: "bucket1".to_string(),
+        bucket_name: "my-bucket".to_string(),
+        access_key_id: None,
+        access_key_id_env: None,
+        secret_access_key: None,
+        secret_access_key_env: None,
+        session_token: None,
+        session_token_env: None,
+        region: Some("us-west-2".to_string()),
+        endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
+        force_path_style: false,
+        sse: Some(SseConfig {
+          sse_type: SseType::SseC,
+          kms_key_id: None,
+          kms_key_id_env: None,
+          kms_context: None,
+          kms_context_env: None,
+          customer_key_base64: Some(short_key_b64),
+          customer_key_base64_env: None,
+          customer_key_md5_base64: None,
+          customer_key_md5_base64_env: None,
+        }),
+        timeout: 30,
+      }],
+      service_access_tokens: vec![ServiceAccessTokenConfig {
+        name: "test".to_string(),
+        bucket: "bucket1".to_string(),
+        prefix: "/ci".to_string(),
+        access_token: Some("token".to_string()),
+        access_token_env: None,
+      }],
+      port: 3000,
+      debug: false,
+    };
+
+    let err = config
+      .resolve_env_vars()
+      .expect_err("Expected sseC length validation error");
+    assert!(matches!(err, ConfigError::Validation(_)));
+  }
+
+  #[test]
+  fn test_resolve_sse_c_from_env() {
+    let key_env = "NX_CACHE_SSE_C_KEY_TEST";
+    let key_value = b"0123456789abcdef0123456789abcdef".to_vec();
+    let key_value_b64 = general_purpose::STANDARD.encode(&key_value);
+    std::env::set_var(key_env, &key_value_b64);
+
+    let config = Config {
+      buckets: vec![BucketConfig {
+        name: "bucket1".to_string(),
+        bucket_name: "my-bucket".to_string(),
+        access_key_id: None,
+        access_key_id_env: None,
+        secret_access_key: None,
+        secret_access_key_env: None,
+        session_token: None,
+        session_token_env: None,
+        region: Some("us-west-2".to_string()),
+        endpoint_url: None,
+        tls_ca_file: None,
+        tls_ca_file_env: None,
+        insecure_tls: None,
+        insecure_tls_env: None,
+        force_path_style: false,
+        sse: Some(SseConfig {
+          sse_type: SseType::SseC,
+          kms_key_id: None,
+          kms_key_id_env: None,
+          kms_context: None,
+          kms_context_env: None,
+          customer_key_base64: None,
+          customer_key_base64_env: Some(key_env.to_string()),
+          customer_key_md5_base64: None,
+          customer_key_md5_base64_env: None,
+        }),
+        timeout: 30,
+      }],
+      service_access_tokens: vec![ServiceAccessTokenConfig {
+        name: "test".to_string(),
+        bucket: "bucket1".to_string(),
+        prefix: "/ci".to_string(),
+        access_token: Some("token".to_string()),
+        access_token_env: None,
+      }],
+      port: 3000,
+      debug: false,
+    };
+
+    let resolved = config.resolve_env_vars().expect("Expected resolved config");
+    let bucket = resolved.get_bucket("bucket1").expect("bucket not found");
+    match &bucket.sse {
+      Some(ResolvedSseConfig::SseC { key }) => assert_eq!(key, &key_value_b64),
+      _ => panic!("Expected sseC configuration"),
+    }
+
+    std::env::remove_var(key_env);
   }
 
   #[test]
