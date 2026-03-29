@@ -6,7 +6,7 @@
 pub mod storage_contract;
 
 #[allow(dead_code)]
-pub const SSE_C_KEY: &str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+pub const SSE_C_KEY: &str = "0123456789abcdef0123456789abcdef";
 
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;

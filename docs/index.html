@@ -816,7 +816,7 @@ nx-cache-server --config config.toml</code>
                     <ul>
                         <li><strong>sseS3</strong> – AES256 managed by S3.</li>
                         <li><strong>sseKms</strong> – KMS-backed; requires <code>kmsKeyId</code> or <code>kmsKeyIdEnv</code>. Optional <code>kmsContext</code>/<code>kmsContextEnv</code> can be a map or JSON object string.</li>
-                        <li><strong>sseC</strong> – customer-provided key; requires <code>customerKeyBase64</code> or <code>customerKeyBase64Env</code> (must decode to 32 bytes). Optional <code>customerKeyMd5Base64</code> for validation. SSE-C requires HTTPS and the same key for reads.</li>
+                        <li><strong>sseC</strong> – customer-provided key; requires <code>customerKeyBase64</code> or <code>customerKeyBase64Env</code> (must decode to 32 bytes). SSE-C requires HTTPS and the same key for reads.</li>
                     </ul>
                     <p style="color: var(--text-light);">SSE-C keys are sensitive; store them in environment variables or a secrets manager and never log or commit them.</p>
                     <p style="color: var(--text-light);">Compatibility notes: Garage does not support SSE-C; SeaweedFS does not support SSE-KMS in integration tests. SSE-KMS support depends on backend configuration.</p>
@@ -859,8 +859,7 @@ buckets:
     region: us-west-2
     sse:
       type: sseC
-      customerKeyBase64Env: NX_SSE_C_KEY
-      customerKeyMd5Base64Env: NX_SSE_C_KEY_MD5</code>
+      customerKeyBase64Env: NX_SSE_C_KEY</code>
                     </div>
 
                     <h4 style="margin-top: 1rem;">TOML examples</h4>
@@ -886,7 +885,7 @@ sse = { type = "sse_kms", kms_key_id = "arn:aws:kms:us-west-2:123456789012:key/a
 name = "production"
 bucket_name = "my-nx-cache"
 region = "us-west-2"
-sse = { type = "sse_c", customer_key_base64_env = "NX_SSE_C_KEY", customer_key_md5_base64_env = "NX_SSE_C_KEY_MD5" }</code>
+sse = { type = "sse_c", customer_key_base64_env = "NX_SSE_C_KEY" }</code>
                     </div>
 
                     <div class="code-block">
@@ -901,7 +900,7 @@ RustFS     | ❌     | ❓      | ✅</code>
                     <div class="code-block">
                         <code>sse_s3, sse_kms, sse_c
 kms_key_id, kms_context
-customer_key_base64, customer_key_md5_base64</code>
+customer_key_base64</code>
                     </div>
 
                     <div class="info-box primary">

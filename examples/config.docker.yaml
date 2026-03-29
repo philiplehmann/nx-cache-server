@@ -24,8 +24,6 @@ buckets:
     #   # SSE-C requires HTTPS and a base64-encoded 32-byte key
     #   # type: sseC
     #   # customerKeyBase64Env: MINIO_SSE_C_KEY
-    #   # Optional: base64-encoded MD5 of the raw key
-    #   # customerKeyMd5Base64Env: MINIO_SSE_C_KEY_MD5
     timeout: 30
 
 # Service Access Tokens

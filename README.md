@@ -136,7 +136,7 @@ You can enable SSE per bucket with the `sse` block:
 
 - `type: sseS3` – AES256 managed by S3.
 - `type: sseKms` – AWS/MinIO KMS; requires `kmsKeyId` or `kmsKeyIdEnv`. Optional `kmsContext`/`kmsContextEnv` can be a map/object of string pairs or a JSON object string.
-- `type: sseC` – customer-provided key; requires `customerKeyBase64` or `customerKeyBase64Env` (must decode to 32 bytes). Optional `customerKeyMd5Base64` can be provided for validation. SSE-C requires HTTPS and the same key for reads.
+- `type: sseC` – customer-provided key; requires `customerKeyBase64` or `customerKeyBase64Env` (must decode to 32 bytes). SSE-C requires HTTPS and the same key for reads.
 
 SSE-C keys are sensitive; store them in environment variables or a secrets manager and never log or commit them.
 Note: Garage does not support SSE-C in our integration tests; use a different backend if you need SSE-C.
@@ -196,7 +196,6 @@ buckets:
     sse:
       type: sseC
       customerKeyBase64Env: NX_SSE_C_KEY
-      customerKeyMd5Base64Env: NX_SSE_C_KEY_MD5
 ```
 
 #### SSE examples (TOML)
@@ -225,10 +224,10 @@ sse = { type = "sse_kms", kms_key_id = "arn:aws:kms:us-west-2:123456789012:key/a
 name = "production"
 bucket_name = "my-nx-cache"
 region = "us-west-2"
-sse = { type = "sse_c", customer_key_base64_env = "NX_SSE_C_KEY", customer_key_md5_base64_env = "NX_SSE_C_KEY_MD5" }
+sse = { type = "sse_c", customer_key_base64_env = "NX_SSE_C_KEY" }
 ```
 
-TOML uses snake_case keys and types: `sse_s3`, `sse_kms`, `sse_c`, `kms_key_id`, `kms_context`, `customer_key_base64`, `customer_key_md5_base64`, etc.
+TOML uses snake_case keys and types: `sse_s3`, `sse_kms`, `sse_c`, `kms_key_id`, `kms_context`, `customer_key_base64`, etc.
 
 **📋 [Example Configurations](examples/)** - Ready-to-use configuration files:
 - [`config.minimal.yaml`](examples/config.minimal.yaml) - Simplest setup for quick start
