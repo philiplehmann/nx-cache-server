@@ -70,8 +70,6 @@ buckets:
     # sse:
     #   type: sseC
     #   customerKeyBase64Env: MINIO_SSE_C_KEY
-    #   # Optional: base64-encoded MD5 of the raw key
-    #   # customerKeyMd5Base64Env: MINIO_SSE_C_KEY_MD5
     timeout: 30
 
   # Fourth bucket example - Using IAM roles (no explicit credentials)

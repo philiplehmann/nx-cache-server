@@ -53,10 +53,6 @@ pub struct SseConfig {
   pub customer_key_base64: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub customer_key_base64_env: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub customer_key_md5_base64: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub customer_key_md5_base64_env: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -517,24 +513,15 @@ impl Config {
         bucket_name
       )));
     }
-    Ok(key_b64.to_string())
-  }
-
-  fn validate_sse_c_md5(bucket_name: &str, md5_b64: &str) -> Result<(), ConfigError> {
-    let decoded = general_purpose::STANDARD.decode(md5_b64).map_err(|_| {
+    String::from_utf8(decoded).map_err(|_| {
       ConfigError::Validation(format!(
-        "Bucket '{}': sse.customerKeyMd5Base64 must be valid base64",
+        "Bucket '{}': sse.customerKeyBase64 must decode to 32 bytes of UTF-8",
         bucket_name
       ))
-    })?;
-    if decoded.len() != 16 {
-      return Err(ConfigError::Validation(format!(
-        "Bucket '{}': sse.customerKeyMd5Base64 must decode to 16 bytes",
-        bucket_name
-      )));
-    }
-    Ok(())
+    })
   }
+
+
 
   fn resolve_sse(bucket_name: &str, sse: &SseConfig) -> Result<ResolvedSseConfig, ConfigError> {
     match &sse.sse_type {
@@ -545,8 +532,6 @@ impl Config {
           || sse.kms_context_env.is_some()
           || sse.customer_key_base64.is_some()
           || sse.customer_key_base64_env.is_some()
-          || sse.customer_key_md5_base64.is_some()
-          || sse.customer_key_md5_base64_env.is_some()
         {
           return Err(ConfigError::Validation(format!(
             "Bucket '{}': sseS3 does not allow KMS or customer key fields",
@@ -558,8 +543,6 @@ impl Config {
       SseType::SseKms => {
         if sse.customer_key_base64.is_some()
           || sse.customer_key_base64_env.is_some()
-          || sse.customer_key_md5_base64.is_some()
-          || sse.customer_key_md5_base64_env.is_some()
         {
           return Err(ConfigError::Validation(format!(
             "Bucket '{}': sseKms does not allow customerKey fields",
@@ -604,13 +587,6 @@ impl Config {
           )));
         }
         let key = Self::decode_sse_c_key(bucket_name, &key_b64)?;
-        let md5_b64 = Self::resolve_optional_env(
-          &sse.customer_key_md5_base64,
-          &sse.customer_key_md5_base64_env,
-        )?;
-        if let Some(md5_b64) = md5_b64 {
-          Self::validate_sse_c_md5(bucket_name, &md5_b64)?;
-        }
         Ok(ResolvedSseConfig::SseC { key })
       },
     }
@@ -657,8 +633,6 @@ pub struct TomlSseConfig {
   pub kms_context_env: Option<String>,
   pub customer_key_base64: Option<String>,
   pub customer_key_base64_env: Option<String>,
-  pub customer_key_md5_base64: Option<String>,
-  pub customer_key_md5_base64_env: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -729,8 +703,6 @@ impl From<TomlSseConfig> for SseConfig {
       kms_context_env: value.kms_context_env,
       customer_key_base64: value.customer_key_base64,
       customer_key_base64_env: value.customer_key_base64_env,
-      customer_key_md5_base64: value.customer_key_md5_base64,
-      customer_key_md5_base64_env: value.customer_key_md5_base64_env,
     }
   }
 }
@@ -1075,8 +1047,6 @@ mod tests {
           kms_context_env: None,
           customer_key_base64: None,
           customer_key_base64_env: None,
-          customer_key_md5_base64: None,
-          customer_key_md5_base64_env: None,
         }),
         timeout: 30,
       }],
@@ -1125,8 +1095,6 @@ mod tests {
           kms_context_env: None,
           customer_key_base64: Some(short_key_b64),
           customer_key_base64_env: None,
-          customer_key_md5_base64: None,
-          customer_key_md5_base64_env: None,
         }),
         timeout: 30,
       }],
@@ -1179,8 +1147,6 @@ mod tests {
           kms_context_env: None,
           customer_key_base64: None,
           customer_key_base64_env: Some(key_env.to_string()),
-          customer_key_md5_base64: None,
-          customer_key_md5_base64_env: None,
         }),
         timeout: 30,
       }],
@@ -1198,7 +1164,9 @@ mod tests {
     let resolved = config.resolve_env_vars().expect("Expected resolved config");
     let bucket = resolved.get_bucket("bucket1").expect("bucket not found");
     match &bucket.sse {
-      Some(ResolvedSseConfig::SseC { key }) => assert_eq!(key, &key_value_b64),
+      Some(ResolvedSseConfig::SseC { key }) => {
+        assert_eq!(key, "0123456789abcdef0123456789abcdef")
+      },
       _ => panic!("Expected sseC configuration"),
     }
 
