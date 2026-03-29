@@ -1,0 +1,15 @@
+[images.minio]
+repository = "minio/minio"
+tag = "RELEASE.2025-09-07T16-13-09Z"
+
+[images.garage]
+repository = "dxflrs/garage"
+tag = "v2.2.0"
+
+[images.seaweedfs]
+repository = "chrislusf/seaweedfs"
+tag = "4.15"
+
+[images.rustfs]
+repository = "rustfs/rustfs"
+tag = "1.0.0-alpha.85"

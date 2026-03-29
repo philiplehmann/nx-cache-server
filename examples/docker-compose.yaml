@@ -56,6 +56,10 @@ services:
       CI_ACCESS_TOKEN: ${CI_ACCESS_TOKEN:-ci-secret-token-change-me}
       DEV_ACCESS_TOKEN: ${DEV_ACCESS_TOKEN:-dev-secret-token-change-me}
       TEAM_ACCESS_TOKEN: ${TEAM_ACCESS_TOKEN:-team-secret-token-change-me}
+      # Optional: SSE-C customer key (base64-encoded 32-byte key, HTTPS required)
+      # MINIO_SSE_C_KEY: ${MINIO_SSE_C_KEY:-}
+      # Optional: base64-encoded MD5 of the raw key
+      # MINIO_SSE_C_KEY_MD5: ${MINIO_SSE_C_KEY_MD5:-}
     volumes:
       # Mount the Docker-specific configuration
       - ./config.docker.yaml:/app/config.yaml:ro
