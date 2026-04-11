@@ -7,6 +7,7 @@ pub mod storage_contract;
 
 #[allow(dead_code)]
 pub const SSE_C_KEY: &str = "0123456789abcdef0123456789abcdef";
+pub const SEAWEEDFS_SSE_S3_KEY: &str = "0123456789abcdef0123456789abcdef";
 
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
@@ -859,6 +860,8 @@ impl SeaweedfsTestContainer {
 
     let access_key = "admin".to_string();
     let secret_key = "key".to_string();
+    let sse_s3_key = std::env::var("NX_CACHE_TEST_SEAWEEDFS_SSE_KEY")
+      .unwrap_or_else(|_| SEAWEEDFS_SSE_S3_KEY.to_string());
 
     let tls = create_minio_tls_certs()?;
 
@@ -880,6 +883,7 @@ impl SeaweedfsTestContainer {
       .with_mapped_port(host_port, ContainerPort::Tcp(8333))
       .with_env_var("AWS_ACCESS_KEY_ID", access_key.clone())
       .with_env_var("AWS_SECRET_ACCESS_KEY", secret_key.clone())
+      .with_env_var("WEED_S3_SSE_KEY", sse_s3_key)
       .with_mount(Mount::bind_mount(tls.dir_path_string(), "/opt/tls"))
       .with_cmd([
         "server",
