@@ -18,6 +18,12 @@ buckets:
     region: us-east-1
     # Required for MinIO and most S3-compatible services
     forcePathStyle: true
+    # Server-side encryption (optional)
+    # sse:
+    #   type: sseS3
+    #   # SSE-C requires HTTPS and a base64-encoded 32-byte key
+    #   # type: sseC
+    #   # customerKeyBase64Env: MINIO_SSE_C_KEY
     timeout: 30
 
 # Service Access Tokens

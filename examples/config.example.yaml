@@ -33,6 +33,17 @@ buckets:
     # Set to true for MinIO and some S3-compatible services
     forcePathStyle: false
 
+    # Server-side encryption (optional)
+    # type: sseS3 | sseKms | sseC
+    sse:
+      type: sseKms
+      # kmsKeyId: arn:aws:kms:us-west-2:123456789012:key/your-key-id
+      kmsKeyIdEnv: AWS_KMS_KEY_ID
+      # kmsContext can be a map/object of string pairs
+      kmsContext:
+        app: nx-cache
+        env: prod
+
     # S3 operation timeout in seconds (optional, defaults to 30)
     timeout: 30
 
@@ -43,6 +54,8 @@ buckets:
     secretAccessKeyEnv: STAGING_AWS_SECRET_ACCESS_KEY
     region: us-east-1
     forcePathStyle: false
+    sse:
+      type: sseS3
     timeout: 45
 
   # Third bucket example - MinIO or S3-compatible storage
@@ -53,6 +66,10 @@ buckets:
     region: us-east-1
     endpointUrl: http://localhost:9000
     forcePathStyle: true  # Required for MinIO
+    # Optional SSE-C example (base64-encoded 32-byte key, HTTPS required)
+    # sse:
+    #   type: sseC
+    #   customerKeyBase64Env: MINIO_SSE_C_KEY
     timeout: 30
 
   # Fourth bucket example - Using IAM roles (no explicit credentials)

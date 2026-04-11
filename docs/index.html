@@ -811,6 +811,98 @@ access_token_env = "CI_ACCESS_TOKEN"</code>
 nx-cache-server --config config.toml</code>
                     </div>
 
+                    <h3 style="margin-top: 1.5rem;">Server-side encryption (SSE)</h3>
+                    <p style="margin-top: 0.5rem;">Enable encryption per bucket using the <code>sse</code> block:</p>
+                    <ul>
+                        <li><strong>sseS3</strong> – AES256 managed by S3.</li>
+                        <li><strong>sseKms</strong> – KMS-backed; requires <code>kmsKeyId</code> or <code>kmsKeyIdEnv</code>. Optional <code>kmsContext</code>/<code>kmsContextEnv</code> can be a map or JSON object string.</li>
+                        <li><strong>sseC</strong> – customer-provided key; requires <code>customerKeyBase64</code> or <code>customerKeyBase64Env</code> (must decode to 32 bytes). SSE-C requires HTTPS and the same key for reads.</li>
+                    </ul>
+                    <p style="color: var(--text-light);">SSE-C keys are sensitive; store them in environment variables or a secrets manager and never log or commit them.</p>
+                    <p style="color: var(--text-light);">Compatibility notes: Garage does not support SSE-C; SeaweedFS does not support SSE-KMS in integration tests. SSE-KMS support depends on backend configuration.</p>
+
+                    <h3 style="margin-top: 1.5rem;">TLS (custom CA / insecure)</h3>
+                    <p style="margin-top: 0.5rem;">You can control TLS behavior for S3-compatible endpoints with the following environment variables:</p>
+                    <ul>
+                        <li><strong>SSL_CERT_FILE</strong> — absolute path to a PEM-encoded CA bundle used as trusted root certificates for the S3 client. Useful for certificate pinning with self-hosted MinIO or private PKI.</li>
+                        <li><strong>NX_CACHE_SERVER_INSECURE_TLS</strong> — set to <code>1</code>, <code>true</code>, <code>yes</code>, or <code>y</code> to disable TLS certificate verification; set to <code>0</code>, <code>false</code>, <code>no</code>, or <code>n</code> to explicitly enable verification. Use only for development or controlled environments.</li>
+                    </ul>
+                    <p style="color: var(--text-light);">These values act as defaults for per-bucket <code>tlsCaFile</code>/<code>tlsCaFileEnv</code> and <code>insecureTls</code>/<code>insecureTlsEnv</code> settings; if a bucket sets its own values, the bucket configuration takes precedence.</p>
+
+                    <h4 style="margin-top: 1rem;">YAML examples</h4>
+                    <div class="code-block">
+                        <code># SSE-S3
+buckets:
+  - name: production
+    bucketName: my-nx-cache
+    region: us-west-2
+    sse:
+      type: sseS3</code>
+                    </div>
+                    <div class="code-block">
+                        <code># SSE-KMS
+buckets:
+  - name: production
+    bucketName: my-nx-cache
+    region: us-west-2
+    sse:
+      type: sseKms
+      kmsKeyId: arn:aws:kms:us-west-2:123456789012:key/abcd-efgh
+      kmsContext:
+        project: nx-cache</code>
+                    </div>
+                    <div class="code-block">
+                        <code># SSE-C
+buckets:
+  - name: production
+    bucketName: my-nx-cache
+    region: us-west-2
+    sse:
+      type: sseC
+      customerKeyBase64Env: NX_SSE_C_KEY</code>
+                    </div>
+
+                    <h4 style="margin-top: 1rem;">TOML examples</h4>
+                    <div class="code-block">
+                        <code># SSE-S3
+[[buckets]]
+name = "production"
+bucket_name = "my-nx-cache"
+region = "us-west-2"
+sse = { type = "sse_s3" }</code>
+                    </div>
+                    <div class="code-block">
+                        <code># SSE-KMS
+[[buckets]]
+name = "production"
+bucket_name = "my-nx-cache"
+region = "us-west-2"
+sse = { type = "sse_kms", kms_key_id = "arn:aws:kms:us-west-2:123456789012:key/abcd-efgh", kms_context = { project = "nx-cache" } }</code>
+                    </div>
+                    <div class="code-block">
+                        <code># SSE-C
+[[buckets]]
+name = "production"
+bucket_name = "my-nx-cache"
+region = "us-west-2"
+sse = { type = "sse_c", customer_key_base64_env = "NX_SSE_C_KEY" }</code>
+                    </div>
+
+                    <div class="code-block">
+                        <code>Service    | SSE-S3 | SSE-KMS | SSE-C
+MinIO      | ✅     | ✅      | ✅
+SeaweedFS  | ✅     | ❌      | ✅
+Garage     | ✅     | ❌      | ❌
+RustFS     | ❌     | ❓      | ✅</code>
+                    </div>
+                    <p style="margin-top: 0.5rem;">Note: RustFS SSE-KMS is not covered by integration tests because the test container does not configure a KMS key.</p>
+                    <p style="margin-top: 0.5rem;">TOML uses snake_case keys and types:</p>
+                    <div class="code-block">
+                        <code>sse_s3, sse_kms, sse_c
+kms_key_id, kms_context
+customer_key_base64</code>
+                    </div>
+
                     <div class="info-box primary">
                         <p><strong>📋 Example Configurations</strong> - Ready-to-use configuration files:</p>
                         <ul style="margin-top: 0.5rem;">

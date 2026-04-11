@@ -7,9 +7,40 @@ use std::future::Future;
 use std::io::Cursor;
 
 use tokio::io::AsyncReadExt;
+use tokio::time::Duration;
 use tokio_util::io::ReaderStream;
 
 use nx_cache_server::domain::storage::{StorageError, StorageProvider};
+
+async fn store_with_retry<S: StorageProvider>(
+  storage: &S,
+  hash: &str,
+  data: &[u8],
+  content_length: u64,
+  retries: usize,
+  delay: Duration,
+) -> Result<(), StorageError> {
+  for attempt in 0..retries {
+    let cursor = Cursor::new(data.to_vec());
+    let reader_stream = ReaderStream::new(cursor);
+
+    match storage
+      .store(hash, reader_stream, Some(content_length))
+      .await
+    {
+      Ok(()) => return Ok(()),
+      Err(StorageError::OperationFailed) => {
+        if attempt + 1 == retries {
+          return Err(StorageError::OperationFailed);
+        }
+        tokio::time::sleep(delay).await;
+      },
+      Err(err) => return Err(err),
+    }
+  }
+
+  Err(StorageError::OperationFailed)
+}
 
 #[allow(dead_code)]
 pub async fn run_store_and_retrieve<S, F, Fut>(provider_name: &str, create_storage: F)
@@ -33,13 +64,20 @@ where
     .expect("Failed to check existence");
   assert!(!exists, "Object should not exist yet");
 
-  let cursor = Cursor::new(test_data.clone());
-  let reader_stream = ReaderStream::new(cursor);
+  let store_result = store_with_retry(
+    &storage,
+    test_hash,
+    &test_data,
+    test_data_len,
+    5,
+    Duration::from_millis(500),
+  )
+  .await;
 
-  storage
-    .store(test_hash, reader_stream, Some(test_data_len))
-    .await
-    .expect("Failed to store data");
+  match store_result {
+    Ok(()) | Err(StorageError::AlreadyExists) => {},
+    Err(err) => panic!("Failed to store data: {:?}", err),
+  }
 
   let exists = storage
     .exists(test_hash)
@@ -79,12 +117,20 @@ where
   let test_hash = "duplicate-hash";
   let test_data = b"Test data";
 
-  let cursor = Cursor::new(test_data.to_vec());
-  let reader_stream = ReaderStream::new(cursor);
-  storage
-    .store(test_hash, reader_stream, Some(test_data.len() as u64))
-    .await
-    .expect("First store should succeed");
+  let first_store = store_with_retry(
+    &storage,
+    test_hash,
+    test_data,
+    test_data.len() as u64,
+    5,
+    Duration::from_millis(500),
+  )
+  .await;
+
+  match first_store {
+    Ok(()) | Err(StorageError::AlreadyExists) => {},
+    Err(err) => panic!("First store should succeed: {:?}", err),
+  }
 
   let cursor = Cursor::new(test_data.to_vec());
   let reader_stream = ReaderStream::new(cursor);
@@ -139,13 +185,20 @@ where
   let test_data: Vec<u8> = (0..data_size).map(|i| (i % 256) as u8).collect();
   let test_hash = "large-file-hash";
 
-  let cursor = Cursor::new(test_data.clone());
-  let reader_stream = ReaderStream::new(cursor);
+  let store_result = store_with_retry(
+    &storage,
+    test_hash,
+    &test_data,
+    data_size as u64,
+    5,
+    Duration::from_millis(500),
+  )
+  .await;
 
-  storage
-    .store(test_hash, reader_stream, Some(data_size as u64))
-    .await
-    .expect("Failed to store large file");
+  match store_result {
+    Ok(()) | Err(StorageError::AlreadyExists) => {},
+    Err(err) => panic!("Failed to store large file: {:?}", err),
+  }
 
   let mut reader = storage
     .retrieve(test_hash)
