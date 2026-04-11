@@ -521,8 +521,6 @@ impl Config {
     })
   }
 
-
-
   fn resolve_sse(bucket_name: &str, sse: &SseConfig) -> Result<ResolvedSseConfig, ConfigError> {
     match &sse.sse_type {
       SseType::SseS3 => {
@@ -541,9 +539,7 @@ impl Config {
         Ok(ResolvedSseConfig::SseS3)
       },
       SseType::SseKms => {
-        if sse.customer_key_base64.is_some()
-          || sse.customer_key_base64_env.is_some()
-        {
+        if sse.customer_key_base64.is_some() || sse.customer_key_base64_env.is_some() {
           return Err(ConfigError::Validation(format!(
             "Bucket '{}': sseKms does not allow customerKey fields",
             bucket_name

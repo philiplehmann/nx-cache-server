@@ -7,8 +7,6 @@ use common::{MinioTestContainer, SSE_C_KEY};
 use nx_cache_server::domain::config::ResolvedSseConfig;
 use nx_cache_server::infra::nx_cache_store::NxCacheStorage;
 
-
-
 /// Integration test that verifies NxCacheStorage works with MinIO
 #[tokio::test(flavor = "multi_thread")]
 async fn test_minio_integration_store_and_retrieve() {

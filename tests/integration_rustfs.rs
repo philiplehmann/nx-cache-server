@@ -13,8 +13,6 @@ use tokio::io::AsyncReadExt;
 
 use tokio_util::io::ReaderStream;
 
-
-
 /// Integration test that verifies NxCacheStorage works with RustFS (S3-compatible)
 #[tokio::test(flavor = "multi_thread")]
 async fn test_rustfs_integration_store_and_retrieve() {

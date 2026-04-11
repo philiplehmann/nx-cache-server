@@ -7,8 +7,6 @@ use common::{retry_config, wait_for_storage_ready, SeaweedfsTestContainer, SSE_C
 use nx_cache_server::domain::config::ResolvedSseConfig;
 use nx_cache_server::infra::nx_cache_store::NxCacheStorage;
 
-
-
 /// Integration test that verifies NxCacheStorage works with SeaweedFS (S3-compatible)
 #[tokio::test(flavor = "multi_thread")]
 async fn test_seaweedfs_integration_store_and_retrieve() {
