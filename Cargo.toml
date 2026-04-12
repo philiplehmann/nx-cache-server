@@ -31,7 +31,7 @@ futures-util = { version = "0.3", default-features = false, features = ["std", "
 [dev-dependencies]
 testcontainers = { version = "0.27.2", features = ["blocking"] }
 testcontainers-modules = { version = "0.15.0", features = ["minio"] }
-rcgen = "0.13"
+rcgen = "0.14"
 tempfile = "3"
 tower = "0.5"
 
