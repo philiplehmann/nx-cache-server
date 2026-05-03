@@ -4,6 +4,7 @@ use common::storage_contract::{
   run_retrieve_nonexistent_fails, run_store_and_retrieve,
 };
 use common::{RustfsTestContainer, SSE_C_KEY};
+use minio::s3::response_traits::HasS3Fields;
 use minio::s3::types::S3Api;
 use nx_cache_server::domain::config::ResolvedSseConfig;
 use nx_cache_server::domain::storage::StorageProvider;
@@ -141,12 +142,14 @@ async fn test_rustfs_sse_kms_store_and_retrieve() {
     .expect("Failed to create RustFS client");
   let stat = client
     .stat_object(bucket_name, test_hash)
+    .expect("Failed to build stat_object")
+    .build()
     .send()
     .await
     .expect("Failed to stat object for SSE-KMS headers");
 
   let sse_header = stat
-    .headers
+    .headers()
     .get("x-amz-server-side-encryption")
     .and_then(|value| value.to_str().ok())
     .unwrap_or_default();

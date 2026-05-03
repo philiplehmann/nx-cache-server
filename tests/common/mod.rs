@@ -11,8 +11,8 @@ pub const SEAWEEDFS_SSE_S3_KEY: &str = "0123456789abcdef0123456789abcdef";
 
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
-use minio::s3::types::S3Api;
-use minio::s3::Client;
+use minio::s3::types::{Region, S3Api};
+use minio::s3::MinioClient;
 use serde::Deserialize;
 use std::fs;
 #[cfg(unix)]
@@ -197,14 +197,14 @@ pub async fn wait_for_storage_ready(
 }
 
 async fn ensure_bucket_exists(
-  client: &Client,
+  client: &MinioClient,
   bucket_name: &str,
   config: RetryConfig,
   label: &str,
 ) -> TestResult<()> {
   for attempt in 0..config.retries {
-    let exists = match client.bucket_exists(bucket_name).send().await {
-      Ok(response) => response.exists,
+    let exists = match client.bucket_exists(bucket_name)?.build().send().await {
+      Ok(response) => response.exists(),
       Err(e) => {
         if attempt + 1 == config.retries {
           return Err(box_err(format!(
@@ -222,7 +222,7 @@ async fn ensure_bucket_exists(
       return Ok(());
     }
 
-    match client.create_bucket(bucket_name).send().await {
+    match client.create_bucket(bucket_name)?.build().send().await {
       Ok(_) => return Ok(()),
       Err(e) => {
         if attempt + 1 == config.retries {
@@ -249,15 +249,10 @@ fn create_s3_client(
   secret_key: &str,
   tls_cert: Option<&Path>,
   insecure_tls: bool,
-) -> TestResult<Client> {
+) -> TestResult<MinioClient> {
   let static_provider = StaticProvider::new(access_key, secret_key, None);
   let ignore_cert_check = if insecure_tls { Some(true) } else { None };
-  let client = Client::new(
-    base_url,
-    Some(Box::new(static_provider)),
-    tls_cert,
-    ignore_cert_check,
-  )?;
+  let client = MinioClient::new(base_url, Some(static_provider), tls_cert, ignore_cert_check)?;
   Ok(client)
 }
 
@@ -462,7 +457,7 @@ impl MinioTestContainer {
   }
 
   /// Create a MinIO client for bucket management
-  pub async fn create_minio_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
+  pub async fn create_minio_client(&self) -> Result<MinioClient, Box<dyn std::error::Error>> {
     let base_url = self.endpoint_url().parse::<BaseUrl>()?;
     let tls_cert = self._tls.as_ref().map(|tls| tls.cert_path());
     create_s3_client(
@@ -513,8 +508,9 @@ impl MinioTestContainer {
     use minio::s3::types::ToStream;
 
     let mut stream = client
-      .list_objects(bucket_name)
+      .list_objects(bucket_name)?
       .recursive(true)
+      .build()
       .to_stream()
       .await;
 
@@ -538,7 +534,11 @@ impl MinioTestContainer {
   ) -> Result<bool, Box<dyn std::error::Error>> {
     let client = self.create_minio_client().await?;
 
-    let result = client.stat_object(bucket_name, object_name).send().await;
+    let result = client
+      .stat_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await;
 
     Ok(result.is_ok())
   }
@@ -557,7 +557,8 @@ impl MinioTestContainer {
     let content = ObjectContent::from(data);
 
     client
-      .put_object_content(bucket_name, object_name, content)
+      .put_object_content(bucket_name, object_name, content)?
+      .build()
       .send()
       .await?;
 
@@ -573,10 +574,14 @@ impl MinioTestContainer {
   ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let client = self.create_minio_client().await?;
 
-    let response = client.get_object(bucket_name, object_name).send().await?;
+    let response = client
+      .get_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await?;
 
     // Get the content from the response and convert to bytes
-    let segmented = response.content.to_segmented_bytes().await?;
+    let segmented = response.content()?.to_segmented_bytes().await?;
     let bytes = segmented.to_bytes();
 
     Ok(bytes.to_vec())
@@ -591,10 +596,9 @@ impl MinioTestContainer {
   ) -> Result<(), Box<dyn std::error::Error>> {
     let client = self.create_minio_client().await?;
 
-    use minio::s3::builders::ObjectToDelete;
-
     client
-      .delete_object(bucket_name, ObjectToDelete::from(object_name))
+      .delete_object(bucket_name, object_name)?
+      .build()
       .send()
       .await?;
 
@@ -687,7 +691,7 @@ impl RustfsTestContainer {
   }
 
   /// Create an S3-compatible client for bucket management
-  pub async fn create_rustfs_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
+  pub async fn create_rustfs_client(&self) -> Result<MinioClient, Box<dyn std::error::Error>> {
     let base_url = self.endpoint_url().parse::<BaseUrl>()?;
     let tls_cert = self._tls.as_ref().map(|tls| tls.cert_path());
     create_s3_client(
@@ -738,8 +742,9 @@ impl RustfsTestContainer {
     use minio::s3::types::ToStream;
 
     let mut stream = client
-      .list_objects(bucket_name)
+      .list_objects(bucket_name)?
       .recursive(true)
+      .build()
       .to_stream()
       .await;
 
@@ -763,7 +768,11 @@ impl RustfsTestContainer {
   ) -> Result<bool, Box<dyn std::error::Error>> {
     let client = self.create_rustfs_client().await?;
 
-    let result = client.stat_object(bucket_name, object_name).send().await;
+    let result = client
+      .stat_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await;
 
     Ok(result.is_ok())
   }
@@ -782,7 +791,8 @@ impl RustfsTestContainer {
     let content = ObjectContent::from(data);
 
     client
-      .put_object_content(bucket_name, object_name, content)
+      .put_object_content(bucket_name, object_name, content)?
+      .build()
       .send()
       .await?;
 
@@ -798,10 +808,14 @@ impl RustfsTestContainer {
   ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let client = self.create_rustfs_client().await?;
 
-    let response = client.get_object(bucket_name, object_name).send().await?;
+    let response = client
+      .get_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await?;
 
     // Get the content from the response and convert to bytes
-    let segmented = response.content.to_segmented_bytes().await?;
+    let segmented = response.content()?.to_segmented_bytes().await?;
     let bytes = segmented.to_bytes();
 
     Ok(bytes.to_vec())
@@ -816,10 +830,9 @@ impl RustfsTestContainer {
   ) -> Result<(), Box<dyn std::error::Error>> {
     let client = self.create_rustfs_client().await?;
 
-    use minio::s3::builders::ObjectToDelete;
-
     client
-      .delete_object(bucket_name, ObjectToDelete::from(object_name))
+      .delete_object(bucket_name, object_name)?
+      .build()
       .send()
       .await?;
 
@@ -941,9 +954,9 @@ impl SeaweedfsTestContainer {
   }
 
   /// Create an S3-compatible client for bucket management
-  pub async fn create_seaweedfs_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
+  pub async fn create_seaweedfs_client(&self) -> Result<MinioClient, Box<dyn std::error::Error>> {
     let mut base_url = self.endpoint_url().parse::<BaseUrl>()?;
-    base_url.region = "us-east-1".to_string();
+    base_url.region = Region::new("us-east-1").unwrap();
     base_url.virtual_style = false;
     let tls_cert = self._tls.as_ref().map(|tls| tls.cert_path());
     create_s3_client(
@@ -964,7 +977,12 @@ impl SeaweedfsTestContainer {
 
     let readiness = retry_config("NX_CACHE_TEST_SEAWEEDFS_BUCKET_READY", 10, 500);
     for attempt in 0..readiness.retries {
-      let exists = client.bucket_exists(bucket_name).send().await?.exists;
+      let exists = client
+        .bucket_exists(bucket_name)?
+        .build()
+        .send()
+        .await?
+        .exists();
       if exists {
         return Ok(());
       }
@@ -1009,8 +1027,9 @@ impl SeaweedfsTestContainer {
     use minio::s3::types::ToStream;
 
     let mut stream = client
-      .list_objects(bucket_name)
+      .list_objects(bucket_name)?
       .recursive(true)
+      .build()
       .to_stream()
       .await;
 
@@ -1034,7 +1053,11 @@ impl SeaweedfsTestContainer {
   ) -> Result<bool, Box<dyn std::error::Error>> {
     let client = self.create_seaweedfs_client().await?;
 
-    let result = client.stat_object(bucket_name, object_name).send().await;
+    let result = client
+      .stat_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await;
 
     Ok(result.is_ok())
   }
@@ -1088,9 +1111,13 @@ impl SeaweedfsTestContainer {
   ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let client = self.create_seaweedfs_client().await?;
 
-    let response = client.get_object(bucket_name, object_name).send().await?;
+    let response = client
+      .get_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await?;
 
-    let segmented = response.content.to_segmented_bytes().await?;
+    let segmented = response.content()?.to_segmented_bytes().await?;
     let bytes = segmented.to_bytes();
 
     Ok(bytes.to_vec())
@@ -1105,10 +1132,9 @@ impl SeaweedfsTestContainer {
   ) -> Result<(), Box<dyn std::error::Error>> {
     let client = self.create_seaweedfs_client().await?;
 
-    use minio::s3::builders::ObjectToDelete;
-
     client
-      .delete_object(bucket_name, ObjectToDelete::from(object_name))
+      .delete_object(bucket_name, object_name)?
+      .build()
       .send()
       .await?;
 
@@ -1196,9 +1222,9 @@ impl LocalstackTestContainer {
   }
 
   /// Create an S3-compatible client for bucket management
-  pub async fn create_localstack_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
+  pub async fn create_localstack_client(&self) -> Result<MinioClient, Box<dyn std::error::Error>> {
     let mut base_url = self.endpoint_url().parse::<BaseUrl>()?;
-    base_url.region = "us-east-1".to_string();
+    base_url.region = Region::new("us-east-1").unwrap();
     base_url.virtual_style = false;
     create_s3_client(base_url, &self.access_key, &self.secret_key, None, false)
   }
@@ -1242,8 +1268,9 @@ impl LocalstackTestContainer {
     use minio::s3::types::ToStream;
 
     let mut stream = client
-      .list_objects(bucket_name)
+      .list_objects(bucket_name)?
       .recursive(true)
+      .build()
       .to_stream()
       .await;
 
@@ -1267,7 +1294,11 @@ impl LocalstackTestContainer {
   ) -> Result<bool, Box<dyn std::error::Error>> {
     let client = self.create_localstack_client().await?;
 
-    let result = client.stat_object(bucket_name, object_name).send().await;
+    let result = client
+      .stat_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await;
 
     Ok(result.is_ok())
   }
@@ -1286,7 +1317,8 @@ impl LocalstackTestContainer {
     let content = ObjectContent::from(data);
 
     client
-      .put_object_content(bucket_name, object_name, content)
+      .put_object_content(bucket_name, object_name, content)?
+      .build()
       .send()
       .await?;
 
@@ -1302,9 +1334,13 @@ impl LocalstackTestContainer {
   ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let client = self.create_localstack_client().await?;
 
-    let response = client.get_object(bucket_name, object_name).send().await?;
+    let response = client
+      .get_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await?;
 
-    let segmented = response.content.to_segmented_bytes().await?;
+    let segmented = response.content()?.to_segmented_bytes().await?;
     let bytes = segmented.to_bytes();
 
     Ok(bytes.to_vec())
@@ -1319,10 +1355,9 @@ impl LocalstackTestContainer {
   ) -> Result<(), Box<dyn std::error::Error>> {
     let client = self.create_localstack_client().await?;
 
-    use minio::s3::builders::ObjectToDelete;
-
     client
-      .delete_object(bucket_name, ObjectToDelete::from(object_name))
+      .delete_object(bucket_name, object_name)?
+      .build()
       .send()
       .await?;
 
@@ -1405,9 +1440,9 @@ impl S3MockTestContainer {
   }
 
   /// Create an S3-compatible client for bucket management
-  pub async fn create_s3mock_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
+  pub async fn create_s3mock_client(&self) -> Result<MinioClient, Box<dyn std::error::Error>> {
     let mut base_url = self.endpoint_url().parse::<BaseUrl>()?;
-    base_url.region = "us-east-1".to_string();
+    base_url.region = Region::new("us-east-1").unwrap();
     base_url.virtual_style = false;
     create_s3_client(base_url, &self.access_key, &self.secret_key, None, false)
   }
@@ -1451,8 +1486,9 @@ impl S3MockTestContainer {
     use minio::s3::types::ToStream;
 
     let mut stream = client
-      .list_objects(bucket_name)
+      .list_objects(bucket_name)?
       .recursive(true)
+      .build()
       .to_stream()
       .await;
 
@@ -1476,7 +1512,11 @@ impl S3MockTestContainer {
   ) -> Result<bool, Box<dyn std::error::Error>> {
     let client = self.create_s3mock_client().await?;
 
-    let result = client.stat_object(bucket_name, object_name).send().await;
+    let result = client
+      .stat_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await;
 
     Ok(result.is_ok())
   }
@@ -1495,7 +1535,8 @@ impl S3MockTestContainer {
     let content = ObjectContent::from(data);
 
     client
-      .put_object_content(bucket_name, object_name, content)
+      .put_object_content(bucket_name, object_name, content)?
+      .build()
       .send()
       .await?;
 
@@ -1511,9 +1552,13 @@ impl S3MockTestContainer {
   ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let client = self.create_s3mock_client().await?;
 
-    let response = client.get_object(bucket_name, object_name).send().await?;
+    let response = client
+      .get_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await?;
 
-    let segmented = response.content.to_segmented_bytes().await?;
+    let segmented = response.content()?.to_segmented_bytes().await?;
     let bytes = segmented.to_bytes();
 
     Ok(bytes.to_vec())
@@ -1528,10 +1573,9 @@ impl S3MockTestContainer {
   ) -> Result<(), Box<dyn std::error::Error>> {
     let client = self.create_s3mock_client().await?;
 
-    use minio::s3::builders::ObjectToDelete;
-
     client
-      .delete_object(bucket_name, ObjectToDelete::from(object_name))
+      .delete_object(bucket_name, object_name)?
+      .build()
       .send()
       .await?;
 
@@ -1615,9 +1659,9 @@ impl GoFakeS3TestContainer {
   }
 
   /// Create an S3-compatible client for bucket management
-  pub async fn create_gofakes3_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
+  pub async fn create_gofakes3_client(&self) -> Result<MinioClient, Box<dyn std::error::Error>> {
     let mut base_url = self.endpoint_url().parse::<BaseUrl>()?;
-    base_url.region = "us-east-1".to_string();
+    base_url.region = Region::new("us-east-1").unwrap();
     base_url.virtual_style = false;
     create_s3_client(base_url, &self.access_key, &self.secret_key, None, false)
   }
@@ -1661,8 +1705,9 @@ impl GoFakeS3TestContainer {
     use minio::s3::types::ToStream;
 
     let mut stream = client
-      .list_objects(bucket_name)
+      .list_objects(bucket_name)?
       .recursive(true)
+      .build()
       .to_stream()
       .await;
 
@@ -1686,7 +1731,11 @@ impl GoFakeS3TestContainer {
   ) -> Result<bool, Box<dyn std::error::Error>> {
     let client = self.create_gofakes3_client().await?;
 
-    let result = client.stat_object(bucket_name, object_name).send().await;
+    let result = client
+      .stat_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await;
 
     Ok(result.is_ok())
   }
@@ -1705,7 +1754,8 @@ impl GoFakeS3TestContainer {
     let content = ObjectContent::from(data);
 
     client
-      .put_object_content(bucket_name, object_name, content)
+      .put_object_content(bucket_name, object_name, content)?
+      .build()
       .send()
       .await?;
 
@@ -1721,9 +1771,13 @@ impl GoFakeS3TestContainer {
   ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let client = self.create_gofakes3_client().await?;
 
-    let response = client.get_object(bucket_name, object_name).send().await?;
+    let response = client
+      .get_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await?;
 
-    let segmented = response.content.to_segmented_bytes().await?;
+    let segmented = response.content()?.to_segmented_bytes().await?;
     let bytes = segmented.to_bytes();
 
     Ok(bytes.to_vec())
@@ -1738,10 +1792,9 @@ impl GoFakeS3TestContainer {
   ) -> Result<(), Box<dyn std::error::Error>> {
     let client = self.create_gofakes3_client().await?;
 
-    use minio::s3::builders::ObjectToDelete;
-
     client
-      .delete_object(bucket_name, ObjectToDelete::from(object_name))
+      .delete_object(bucket_name, object_name)?
+      .build()
       .send()
       .await?;
 
@@ -2096,9 +2149,9 @@ metrics_token = "test-metrics-token"
   }
 
   /// Create a Garage client for direct S3 operations
-  pub async fn create_garage_client(&self) -> Result<Client, Box<dyn std::error::Error>> {
+  pub async fn create_garage_client(&self) -> Result<MinioClient, Box<dyn std::error::Error>> {
     let mut base_url = self.endpoint_url().parse::<BaseUrl>()?;
-    base_url.region = "garage".to_string();
+    base_url.region = Region::new("garage").unwrap();
     base_url.virtual_style = false;
     create_s3_client(base_url, &self.access_key, &self.secret_key, None, false)
   }
@@ -2115,8 +2168,9 @@ metrics_token = "test-metrics-token"
     use minio::s3::types::ToStream;
 
     let mut stream = client
-      .list_objects(bucket_name)
+      .list_objects(bucket_name)?
       .recursive(true)
+      .build()
       .to_stream()
       .await;
 
@@ -2139,7 +2193,11 @@ metrics_token = "test-metrics-token"
     object_name: &str,
   ) -> Result<bool, Box<dyn std::error::Error>> {
     let client = self.create_garage_client().await?;
-    let result = client.stat_object(bucket_name, object_name).send().await;
+    let result = client
+      .stat_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await;
     Ok(result.is_ok())
   }
 
@@ -2157,7 +2215,8 @@ metrics_token = "test-metrics-token"
     let content = ObjectContent::from(data);
 
     client
-      .put_object_content(bucket_name, object_name, content)
+      .put_object_content(bucket_name, object_name, content)?
+      .build()
       .send()
       .await?;
 
@@ -2173,9 +2232,13 @@ metrics_token = "test-metrics-token"
   ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let client = self.create_garage_client().await?;
 
-    let response = client.get_object(bucket_name, object_name).send().await?;
+    let response = client
+      .get_object(bucket_name, object_name)?
+      .build()
+      .send()
+      .await?;
 
-    let segmented = response.content.to_segmented_bytes().await?;
+    let segmented = response.content()?.to_segmented_bytes().await?;
     let bytes = segmented.to_bytes();
 
     Ok(bytes.to_vec())
@@ -2190,10 +2253,9 @@ metrics_token = "test-metrics-token"
   ) -> Result<(), Box<dyn std::error::Error>> {
     let client = self.create_garage_client().await?;
 
-    use minio::s3::builders::ObjectToDelete;
-
     client
-      .delete_object(bucket_name, ObjectToDelete::from(object_name))
+      .delete_object(bucket_name, object_name)?
+      .build()
       .send()
       .await?;
 
