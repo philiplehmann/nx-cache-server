@@ -3,8 +3,8 @@ use minio::s3::builders::ObjectContent;
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::sse::{Sse, SseCustomerKey, SseKms, SseS3};
-use minio::s3::types::S3Api;
-use minio::s3::Client;
+use minio::s3::types::{Region, S3Api};
+use minio::s3::MinioClient;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ use crate::domain::{
 
 #[derive(Clone)]
 pub struct NxCacheStorage {
-  client: Client,
+  client: MinioClient,
   bucket_name: String,
   sse: Option<Arc<dyn Sse>>,
   sse_customer_key: Option<SseCustomerKey>,
@@ -82,7 +82,10 @@ impl NxCacheStorage {
       StorageError::OperationFailed
     })?;
     if let Some(region) = &bucket_config.region {
-      base_url.region = region.clone();
+      base_url.region = Region::new(region).map_err(|e| {
+        tracing::error!("Invalid region: {:?}", e);
+        StorageError::OperationFailed
+      })?;
     }
     if bucket_config.force_path_style {
       base_url.virtual_style = false;
@@ -141,9 +144,9 @@ impl NxCacheStorage {
         })
     });
 
-    let client = Client::new(
+    let client = MinioClient::new(
       base_url,
-      Some(Box::new(static_provider)),
+      Some(static_provider),
       ssl_cert_file.as_deref(),
       ignore_cert_check,
     )
@@ -167,7 +170,12 @@ impl StorageProvider for NxCacheStorage {
     match self
       .client
       .stat_object(&self.bucket_name, hash)
+      .map_err(|e| {
+        tracing::error!("MinIO stat_object builder error: {:?}", e);
+        StorageError::OperationFailed
+      })?
       .ssec(self.sse_customer_key.clone())
+      .build()
       .send()
       .await
     {
@@ -208,7 +216,12 @@ impl StorageProvider for NxCacheStorage {
     self
       .client
       .put_object_content(&self.bucket_name, hash, content)
+      .map_err(|e| {
+        tracing::error!("MinIO put_object_content builder error: {:?}", e);
+        StorageError::OperationFailed
+      })?
       .sse(self.sse.clone())
+      .build()
       .send()
       .await
       .map_err(|e| {
@@ -231,7 +244,12 @@ impl StorageProvider for NxCacheStorage {
       let response = match self
         .client
         .get_object(&self.bucket_name, hash)
+        .map_err(|e| {
+          tracing::error!("MinIO get_object builder error: {:?}", e);
+          StorageError::OperationFailed
+        })?
         .ssec(self.sse_customer_key.clone())
+        .build()
         .send()
         .await
       {
@@ -260,7 +278,28 @@ impl StorageProvider for NxCacheStorage {
         },
       };
 
-      let (stream, _size) = match response.content.to_stream().await {
+      let content = match response.content() {
+        Ok(c) => c,
+        Err(e) => {
+          let err_msg = e.to_string();
+          if Self::is_retryable_error(&err_msg) && attempt < MAX_ATTEMPTS {
+            let delay = Self::retry_delay(attempt);
+            tracing::debug!(
+              "MinIO content error, retrying (attempt {}/{}, delay {:?}): {:?}",
+              attempt,
+              MAX_ATTEMPTS,
+              delay,
+              e
+            );
+            sleep(delay).await;
+            continue;
+          }
+          tracing::error!("Error getting MinIO response content: {:?}", e);
+          return Err(StorageError::OperationFailed);
+        },
+      };
+
+      let (stream, _size) = match content.to_stream().await {
         Ok((stream, size)) => (stream, size),
         Err(e) => {
           let err_msg = e.to_string();
@@ -300,6 +339,15 @@ impl NxCacheStorage {
     let exists = self
       .client
       .bucket_exists(&self.bucket_name)
+      .map_err(|e| {
+        tracing::error!(
+          "Failed to build bucket_exists request '{}': {:?}",
+          self.bucket_name,
+          e
+        );
+        StorageError::OperationFailed
+      })?
+      .build()
       .send()
       .await
       .map_err(|e| {
@@ -307,7 +355,7 @@ impl NxCacheStorage {
         StorageError::OperationFailed
       })?;
 
-    if !exists.exists {
+    if !exists.exists() {
       tracing::error!("Bucket '{}' does not exist", self.bucket_name);
       return Err(StorageError::OperationFailed);
     }
