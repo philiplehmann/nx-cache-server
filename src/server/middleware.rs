@@ -16,7 +16,7 @@ pub async fn auth_middleware(
   State(state): State<AppState>,
   mut request: Request,
   next: Next,
-) -> Result<Response, Response> {
+) -> Response {
   // Extract Bearer token from Authorization header
   let token = request
     .headers()
@@ -27,14 +27,12 @@ pub async fn auth_middleware(
   let token = match token {
     Some(t) => t,
     None => {
-      return Err(
-        (
-          StatusCode::UNAUTHORIZED,
-          [("Content-Type", "text/plain")],
-          "Unauthorized",
-        )
-          .into_response(),
+      return (
+        StatusCode::UNAUTHORIZED,
+        [("Content-Type", "text/plain")],
+        "Unauthorized",
       )
+        .into_response();
     },
   };
 
@@ -64,18 +62,16 @@ pub async fn auth_middleware(
       request
         .extensions_mut()
         .insert(AuthenticatedToken(token_value));
-      Ok(next.run(request).await)
+      next.run(request).await
     },
     None => {
       tracing::warn!("Authentication failed: invalid token");
-      Err(
-        (
-          StatusCode::UNAUTHORIZED,
-          [("Content-Type", "text/plain")],
-          "Unauthorized",
-        )
-          .into_response(),
+      (
+        StatusCode::UNAUTHORIZED,
+        [("Content-Type", "text/plain")],
+        "Unauthorized",
       )
+        .into_response()
     },
   }
 }
