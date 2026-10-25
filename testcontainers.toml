@@ -4,12 +4,12 @@ tag = "RELEASE.2024-07-16T23-46-41Z"
 
 [images.garage]
 repository = "dxflrs/garage"
-tag = "v2.4.1"
+tag = "v2.5.0"
 
 [images.seaweedfs]
 repository = "chrislusf/seaweedfs"
-tag = "4.47"
+tag = "4.50"
 
 [images.rustfs]
 repository = "rustfs/rustfs"
-tag = "1.0.0"
+tag = "1.0.3"
